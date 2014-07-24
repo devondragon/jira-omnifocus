@@ -18,7 +18,7 @@ FLAGGED=true
 def get_issues
   jira_issues = Hash.new
   # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=assignee+%3D+currentUser()+AND+status+not+in+(Closed,+Resolved)') 
+  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=assignee+%3D+currentUser()+AND+status+not+in+(Closed,+Resolved)')
 
   Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
     request = Net::HTTP::Get.new(uri)
@@ -30,7 +30,7 @@ def get_issues
         data["issues"].each do |item|
           jira_id = item["key"]
           jira_issues[jira_id] = item["fields"]["summary"]
-        end    
+        end
     else
      raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
     end
@@ -57,7 +57,7 @@ def add_task(omnifocus_document, new_task_properties)
     ctx_name = new_task_properties["context"]
     ctx = omnifocus_document.flattened_contexts[ctx_name]
   end
-  
+
   # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
   tprops = new_task_properties.inject({}) do |h, (k, v)|
     h[:"#{k}"] = v
@@ -74,7 +74,7 @@ def add_task(omnifocus_document, new_task_properties)
 
   # Make a new Task in the Project
   proj.make(:new => :task, :with_properties => tprops)
-  
+
   puts "task created"
   return true
 end
@@ -117,7 +117,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
   ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
   ctx.tasks.get.find.each do |task|
     if task.note.get.match(JIRA_BASE_URL)
-      # try to parse out jira id      
+      # try to parse out jira id
       full_url= task.note.get
       jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
       # check status of the jira
@@ -128,12 +128,18 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         request.basic_auth USERNAME, PASSWORD
         response = http.request request
 
-        if response.code =~ /20[0-9]{1}/
+  if response.code =~ /20[0-9]{1}/
             data = JSON.parse(response.body)
+            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
             resolution = data["fields"]["resolution"]
             if resolution != nil
               # if resolved, mark it as complete in OmniFocus
               task.completed.set(true)
+            end
+            # Check to see if the Jira ticket has been assigned to someone else, if so delete it.  It will be re-created if it is assigned back to you.
+            assignee = data["fields"]["assignee"]["name"]
+            if assignee != USERNAME
+              omnifocus_document.delete task
             end
         else
          raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue

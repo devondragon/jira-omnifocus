@@ -1,0 +1,9 @@
+---
+jira:
+  hostname: 'example.atlassian.net'
+  username: 'me'
+  password: 'secret'
+  context:  'Jira'
+  project:  'Work'
+  flag:     true
+  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'

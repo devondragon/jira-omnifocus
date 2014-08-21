@@ -1,24 +1,99 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
+
+require 'bundler/setup'
+Bundler.require(:default)
+
 require 'appscript'
-require 'rubygems'
-require 'net/http'
-require 'json'
+require 'yaml'
+
+opts = Trollop::options do
+  banner ""
+  banner <<-EOS
+Jira Omnifocus Sync Tool
+
+Usage:
+       jofsync [options]
+
+KNOWN ISSUES:
+      * With long names you must use an equal sign ( i.e. --hostname=test-target-1 )
+
+---
+EOS
+  version 'jofsync 1.0.0'
+  opt :username, 'Jira Username', :type => :string, :short => 'u', :required => false
+  opt :password, 'Jira Password', :type => :string, :short => 'p', :required => false
+  opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
+  opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
+  opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
+  opt :flag, 'Flag tasks in OF', :type => :boolean, :short => 'f', :required => false
+  opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
+  opt :quiet, 'Disable terminal output', :short => 'q', :default => true
+end
+
+class Hash
+  #take keys of hash and transform those to a symbols
+  def self.transform_keys_to_symbols(value)
+    return value if not value.is_a?(Hash)
+    hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = Hash.transform_keys_to_symbols(v); memo}
+    return hash
+  end
+end
+
+if  File.file?(ENV['HOME']+'/.jofsync.yaml')
+  config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
+  config = Hash.transform_keys_to_symbols(config)
+=begin
+YAML CONFIG EXAMPLE
+---
+jira:
+  hostname: 'example.atlassian.net'
+  username: 'jdoe'
+  password: 'blahblahblah'
+  context: 'Jira'
+  project: 'Work'
+  flag: true
+  filter: 'assignee = currentUser() AND status not in (Closed, Resolved) AND sprint in openSprints()'
+=end
+end
+
+syms = [:username, :hostname, :context, :project, :flag, :filter]
+syms.each { |x|
+  unless opts[x]
+    if config[:jira][x]
+      opts[x] = config[:jira][x]
+    else
+      puts 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
+      exit 1
+    end
+ end
+}
+
+unless opts[:password]
+  if config[:jira][:password]
+    opts[:password] = config[:jira][:password]
+  else
+    opts[:password] = ask("password: ") {|q| q.echo = false}
+  end
+end
 
 #JIRA Configuration
-JIRA_BASE_URL = 'https://www.yoursite.com/jira'
-USERNAME = 'devon'
-PASSWORD = 'mypassword'
+JIRA_BASE_URL = 'https://' + opts[:hostname]
+USERNAME = opts[:username]
+PASSWORD = opts[:password]
+
+QUERY = opts[:filter]
+JQL = URI::encode(QUERY)
 
 #OmniFocus Configuration
-DEFAULT_CONTEXT="Jira"
-DEFAULT_PROJECT="Work"
-FLAGGED=true
+DEFAULT_CONTEXT = opts[:context]
+DEFAULT_PROJECT = opts[:project]
+FLAGGED = opts[:flag]
 
 # This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
 def get_issues
   jira_issues = Hash.new
   # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=assignee+%3D+currentUser()+AND+status+not+in+(Closed,+Resolved)')
+  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=' + JQL)
 
   Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
     request = Net::HTTP::Get.new(uri)
@@ -136,10 +211,15 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
               # if resolved, mark it as complete in OmniFocus
               task.completed.set(true)
             end
-            # Check to see if the Jira ticket has been assigned to someone else, if so delete it.  It will be re-created if it is assigned back to you.
-            assignee = data["fields"]["assignee"]["name"]
-            if assignee != USERNAME
+            # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
+            # It will be re-created if it is assigned back to you.
+            if ! data["fields"]["assignee"]
               omnifocus_document.delete task
+            else
+              assignee = data["fields"]["assignee"]["name"]
+              if assignee != USERNAME
+                omnifocus_document.delete task
+              end
             end
         else
          raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue

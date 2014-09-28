@@ -57,7 +57,7 @@ jira:
 end
 
 syms = [:username, :hostname, :context, :project, :flag, :filter]
-syms.each { |x|
+syms.each do |x|
   unless opts[x]
     if config[:jira][x]
       opts[x] = config[:jira][x]
@@ -66,7 +66,7 @@ syms.each { |x|
       exit 1
     end
  end
-}
+end
 
 unless opts[:password]
   if config[:jira][:password]
@@ -82,114 +82,180 @@ USERNAME = opts[:username]
 PASSWORD = opts[:password]
 
 QUERY = opts[:filter]
-JQL = URI::encode(QUERY)
+p ['QUERY', QUERY]
 
 #OmniFocus Configuration
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
 FLAGGED = opts[:flag]
 
-# This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
-def get_issues
-  jira_issues = Hash.new
-  # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=' + JQL)
 
-  Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-    request = Net::HTTP::Get.new(uri)
-    request.basic_auth USERNAME, PASSWORD
-    response = http.request request
-    # If the response was good, then grab the data
-    if response.code =~ /20[0-9]{1}/
-        data = JSON.parse(response.body)
-        data["issues"].each do |item|
-          jira_id = item["key"]
-          jira_issues[jira_id] = item["fields"]["summary"]
-        end
-    else
-     raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
-    end
+class Omnifocus
+  attr_reader :app, :default_document
+  def initialize
+    @app = Appscript.app.by_name("OmniFocus")
+    @default_document = @app.default_document  
   end
-  return jira_issues
+
+  def context(name=DEFAULT_CONTEXT)
+    default_document.flattened_contexts[name]
+  end
+
+  def project(name=DEFAULT_PROJECT)
+    default_document.flattened_projects[name].get
+  end
+
 end
 
-# This method adds a new Task to OmniFocus based on the new_task_properties passed in
-def add_task(omnifocus_document, new_task_properties)
-  # If there is a passed in OF project name, get the actual project object
-  if new_task_properties['project']
-    proj_name = new_task_properties["project"]
-    proj = omnifocus_document.flattened_tasks[proj_name]
+# helper to normalize access to omnifoucs
+def omnifocus
+  @omni ||= Omnifocus.new
+end
+
+# class to hold jira issues
+class Issue < Hash
+  include Hashie::Extensions::MethodAccess
+  include Hashie::Extensions::IndifferentAccess
+
+  attr_reader :key, :summary, :properties, :fields
+  attr_accessor :context, :project, :flagged, :omnifocus_project, :omnifocus_task, :omnifocus_context
+
+  def initialize(key, issue_attributes={})
+    @project = DEFAULT_PROJECT,
+    @context = DEFAULT_CONTEXT,
+    @flagged = FLAGGED  #TODO: check if issue is flagged, and use that instead
+    @key = key
+    @summary = issue_attributes['summary'] if issue_attributes['summary']
+    @fields = Hashie::Mash.new issue_attributes 
+    # @rank = @fields.rank if issue_attributes['rank']  #TODO: fetch sort order
   end
+
+  def to_s
+    task_name
+  end
+
+  # Create the task name by adding the ticket summary to the jira ticket key
+  def task_name
+    "#{key}: #{summary}"
+  end
+
+  # Create the task notes with the Jira Ticket URL to go into the notes
+  def task_notes
+    "#{JIRA_BASE_URL}/browse/#{key}"
+  end
+
+  # return a hash of properties used when adding or updating an omnifocus task
+  def omnifocus_properties
+    @props = {}
+    @props['name'] = task_name
+    @props['project'] = omnifocus_project
+    @props['context'] = omnifocus_context
+    @props['note'] = task_notes
+    @props['flagged'] = FLAGGED
+  end
+
+  # retrieve current data from jira server for the single issue
+  def fetch(opts)
+    raise "TODO: not implemented yet"
+    uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
+    Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+      request = Net::HTTP::Get.new(uri)
+      request.basic_auth USERNAME, PASSWORD
+      response = http.request request
+      if response.code =~ /20[0-9]{1}/
+        data = JSON.parse(response.body)
+        yield Issue.new(data["key"], data["fields"])
+      else
+       raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+      end
+      
+    end
+  end
+
+  # Fetch collection of issues from the api
+  def self.fetch(jql=QUERY, &block)
+    query = URI::encode(jql)
+    uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=' + query)
+    Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+      request = Net::HTTP::Get.new(uri)
+      request.basic_auth USERNAME, PASSWORD
+      response = http.request request
+      # If the response was good, then grab the data
+      if response.code =~ /20[0-9]{1}/
+          data = JSON.parse(response.body)
+          data["issues"].each do |item|
+            yield item            
+          end
+      else
+       raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+      end
+    end
+  end
+
+  def self.query_results
+    # TODO: add the description
+    # TODO: use labels
+    Issue.fetch do |item|
+      jira_issues[item["key"]]=  Issue.new(item["key"], item["fields"])
+      $stderr.puts [item["key"], jira_issues[item["key"]], item["fields"]["summary"]].inspect
+    end
+    return jira_issues    
+  end
+
+end
+
+# hash to hold the results of api queries
+def jira_issues
+  @jira_issues ||= Hash.new
+end
+
+
+# This method adds a new Task to OmniFocus based on the new_task_properties passed in
+def add_task(issue)
+  # If there is a passed in OF project name, get the actual project object
+  issue.omnifocus_project = omnifocus.project if issue.project
+  # If there is a passed in OF context name, get the actual context object
+  # Update the context property to be the actual context object not the context name
+  issue.omnifocus_context = omnifocus.context if issue.context
 
   # Check to see if there's already an OF Task with that name in the referenced Project
   # If there is, just stop.
-  name   = new_task_properties["name"]
-  exists = proj.tasks.get.find { |t| t.name.get == name }
-  return false if exists
+  # puts "fetching omnifocus task for: \"#{issue.task_name}\""
+  existing_task = issue.omnifocus_project.tasks.get.find { |t|
+   t.name.get == issue.task_name 
+  }
 
-  # If there is a passed in OF context name, get the actual context object
-  if new_task_properties['context']
-    ctx_name = new_task_properties["context"]
-    ctx = omnifocus_document.flattened_contexts[ctx_name]
-  end
-
-  # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
-  tprops = new_task_properties.inject({}) do |h, (k, v)|
-    h[:"#{k}"] = v
-    h
-  end
-
-  # Remove the project property from the new Task properties, as it won't be used like that.
-  tprops.delete(:project)
-  # Update the context property to be the actual context object not the context name
-  tprops[:context] = ctx if new_task_properties['context']
+  #TODO: update_issue if exists
+  return false if existing_task
 
   # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
+  # new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => issue.omnifocus_properties)
 
   # Make a new Task in the Project
-  proj.make(:new => :task, :with_properties => tprops)
-
-  puts "task created"
+  proj.make(:new => :task, :with_properties => issue.omnifocus_properties)
+  p ["task created:", issue.omnifocus_properties]
   return true
 end
 
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
-  results = get_issues
+  results = Issue.query_results
   if results.nil?
     puts "No results from Jira"
     exit
   end
-
-  # Get the OmniFocus app and main document via AppleScript
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
+  puts "\"#{QUERY}\" returned #{results.size} results from #{JIRA_BASE_URL}"
 
   # Iterate through resulting issues.
-  results.each do |jira_id, summary|
-    # Create the task name by adding the ticket summary to the jira ticket key
-    task_name = "#{jira_id}: #{summary}"
-    # Create the task notes with the Jira Ticket URL
-    task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
-
-    # Build properties for the Task
-    @props = {}
-    @props['name'] = task_name
-    @props['project'] = DEFAULT_PROJECT
-    @props['context'] = DEFAULT_CONTEXT
-    @props['note'] = task_notes
-    @props['flagged'] = FLAGGED
-    add_task(omnifocus_document, @props)
+  results.each do |jira_id, issue|
+    add_task(issue)
   end
 end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
   # get tasks from the project
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
-  ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
+  ctx = omnifocus.context
   ctx.tasks.get.find.each do |task|
     if task.note.get.match(JIRA_BASE_URL)
       # try to parse out jira id
@@ -198,33 +264,40 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
       # check status of the jira
       uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
 
+      # issue = jira_issues[jira_id]
+      #TODO: refactor to use cached issue if present
+      # issue = jira_issues[jira_id] ? jira_issues[jira_id] : Issue.new(jira_id).fetch
+      #TODO: only fetch when the issue was not already fetched, and present in jira_issues
+      
       Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
         request = Net::HTTP::Get.new(uri)
         request.basic_auth USERNAME, PASSWORD
         response = http.request request
 
-  if response.code =~ /20[0-9]{1}/
-            data = JSON.parse(response.body)
-            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-            resolution = data["fields"]["resolution"]
-            if resolution != nil
-              # if resolved, mark it as complete in OmniFocus
-              task.completed.set(true)
-            end
-            # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
-            # It will be re-created if it is assigned back to you.
-            if ! data["fields"]["assignee"]
+        if response.code =~ /20[0-9]{1}/
+          data = JSON.parse(response.body)
+          # Check to see if the Jira ticket has been resolved, if so mark it as complete.
+          resolution = data["fields"]["resolution"]
+          if resolution != nil #|| %w(Closed, Resolved).include?(issue.status)
+            # if resolved, mark it as complete in OmniFocus
+            task.completed.set(true)
+          end
+          # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
+          # It will be re-created if it is assigned back to you.
+          if ! data["fields"]["assignee"]
+            omnifocus_document.delete task
+          else
+            assignee = data["fields"]["assignee"]["name"]
+            if assignee != USERNAME
               omnifocus_document.delete task
-            else
-              assignee = data["fields"]["assignee"]["name"]
-              if assignee != USERNAME
-                omnifocus_document.delete task
-              end
             end
+          end
         else
          raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
         end
+
       end
+
     end
   end
 end

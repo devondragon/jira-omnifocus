@@ -15,12 +15,20 @@ GEM
       minitest (~> 5.1)
       thread_safe (~> 0.1)
       tzinfo (~> 1.1)
+    coderay (1.1.0)
+    hashie (3.3.1)
     highline (1.6.21)
     i18n (0.6.11)
     json (1.8.1)
+    method_source (0.8.2)
     minitest (5.4.0)
     oauth (0.4.7)
+    pry (0.10.1)
+      coderay (~> 1.1.0)
+      method_source (~> 0.8.1)
+      slop (~> 3.4)
     rb-appscript (0.6.1)
+    slop (3.6.0)
     thread_safe (0.3.4)
     trollop (2.0)
     tzinfo (1.2.2)
@@ -30,8 +38,10 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  hashie
   highline
   jira-ruby!
   json
+  pry
   rb-appscript
   trollop

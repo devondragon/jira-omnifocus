@@ -31,7 +31,7 @@ You can run the script manually or you can add a cron entry to run it periodical
 You can use crontab -e to edit your user crontab and create an entry like this:
 
 ```
-*/10 * * * * cd ~/dev/git/jira-omnifocus/bin && ./jiraomnifocus.rb
+*/10 * * * * cd ~/dev/git/jira-omnifocus/bin && ./jofsync
 ```
 
 That should be it!  If it doesn't work, try adding some puts debug statements and running it manually.  

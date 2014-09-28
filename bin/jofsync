@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+
+require 'bundler/setup'
+Bundler.require(:default)
+
+require 'trollop'
+require 'yaml'
+require 'issue'
+require 'jiraomnifocus'
+
+
+opts = Trollop::options do
+  banner ""
+  banner <<-EOS
+Jira Omnifocus Sync Tool
+
+Usage:
+       jofsync [options]
+
+KNOWN ISSUES:
+      * With long names you must use an equal sign ( i.e. --hostname=test-target-1 )
+
+---
+EOS
+  version 'jofsync 1.0.0'
+  opt :username, 'Jira Username', :type => :string, :short => 'u', :required => false
+  opt :password, 'Jira Password', :type => :string, :short => 'p', :required => false
+  opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
+  opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
+  opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
+  opt :flag, 'Flag tasks in OF', :type => :boolean, :short => 'f', :required => false
+  opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
+  opt :quiet, 'Disable terminal output', :short => 'q', :default => true
+end
+
+class Hash
+  #take keys of hash and transform those to a symbols
+  def self.transform_keys_to_symbols(value)
+    return value if not value.is_a?(Hash)
+    hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = Hash.transform_keys_to_symbols(v); memo}
+    return hash
+  end
+end
+
+if  File.file?(ENV['HOME']+'/.jofsync.yaml')
+  config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
+  config = Hash.transform_keys_to_symbols(config)
+=begin
+YAML CONFIG EXAMPLE
+---
+jira:
+  hostname: 'example.atlassian.net'
+  username: 'jdoe'
+  password: 'blahblahblah'
+  context: 'Jira'
+  project: 'Work'
+  flag: true
+  filter: 'assignee = currentUser() AND status not in (Closed, Resolved) AND sprint in openSprints()'
+=end
+end
+
+syms = [:username, :hostname, :context, :project, :flag, :filter]
+syms.each do |x|
+  unless opts[x]
+    if config[:jira][x]
+      opts[x] = config[:jira][x]
+    else
+      puts 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
+      exit 1
+    end
+ end
+end
+
+unless opts[:password]
+  if config[:jira][:password]
+    opts[:password] = config[:jira][:password]
+  else
+    opts[:password] = ask("password: ") {|q| q.echo = false}
+  end
+end
+
+#JIRA Configuration
+JIRA_BASE_URL = 'https://' + opts[:hostname]
+USERNAME = opts[:username]
+PASSWORD = opts[:password]
+QUERY = opts[:filter]
+
+#OmniFocus Configuration
+DEFAULT_CONTEXT = opts[:context]
+DEFAULT_PROJECT = opts[:project]
+FLAGGED = opts[:flag] ||= false
+
+
+
+def app_is_running(app_name)
+  `ps aux` =~ /#{app_name}/ ? true : false
+end
+
+def main ()
+   if app_is_running("OmniFocus")
+    add_jira_tickets_to_omnifocus
+    mark_resolved_jira_tickets_as_complete_in_omnifocus
+   end
+end
+
+main

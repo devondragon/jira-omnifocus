@@ -107,7 +107,7 @@ def get_issues
           jira_issues[jira_id] = item["fields"]["summary"]
         end
     else
-     raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+     raise StandardError, "Unsuccessful HTTP response code: " + response.code
     end
   end
   return jira_issues
@@ -209,16 +209,21 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
             resolution = data["fields"]["resolution"]
             if resolution != nil
               # if resolved, mark it as complete in OmniFocus
-              task.completed.set(true)
+              if task.completed.get != true
+                task.completed.set(true)
+                puts "task marked completed"
+              end
             end
             # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
             # It will be re-created if it is assigned back to you.
             if ! data["fields"]["assignee"]
               omnifocus_document.delete task
+              puts "task removed"
             else
               assignee = data["fields"]["assignee"]["name"]
               if assignee != USERNAME
                 omnifocus_document.delete task
+                puts "task removed"
               end
             end
         else

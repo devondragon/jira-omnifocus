@@ -5,6 +5,7 @@ Bundler.require(:default)
 
 require 'appscript'
 require 'yaml'
+require 'net/http'
 
 opts = Trollop::options do
   banner ""

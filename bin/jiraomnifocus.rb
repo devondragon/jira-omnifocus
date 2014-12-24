@@ -105,7 +105,8 @@ def get_issues
         data = JSON.parse(response.body)
         data["issues"].each do |item|
           jira_id = item["key"]
-          jira_issues[jira_id] = item["fields"]["summary"]
+#          jira_issues[jira_id] = item["fields"]["summary"]
+          jira_issues[jira_id] = item
         end
     else
      raise StandardError, "Unsuccessful HTTP response code: " + response.code
@@ -169,12 +170,12 @@ def add_jira_tickets_to_omnifocus ()
   omnifocus_document = omnifocus_app.default_document
 
   # Iterate through resulting issues.
-  results.each do |jira_id, summary|
+  results.each do |jira_id, ticket|
     # Create the task name by adding the ticket summary to the jira ticket key
-    task_name = "#{jira_id}: #{summary}"
+    task_name = "#{jira_id}: #{ticket["fields"]["summary"]}"
     # Create the task notes with the Jira Ticket URL
     task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
-
+    
     # Build properties for the Task
     @props = {}
     @props['name'] = task_name
@@ -182,6 +183,9 @@ def add_jira_tickets_to_omnifocus ()
     @props['context'] = DEFAULT_CONTEXT
     @props['note'] = task_notes
     @props['flagged'] = FLAGGED
+    unless ticket["fields"]["duedate"].nil?
+      @props["due_date"] = Date.parse(ticket["fields"]["duedate"])
+    end
     add_task(omnifocus_document, @props)
   end
 end
@@ -192,7 +196,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
   omnifocus_document = omnifocus_app.default_document
   ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
   ctx.tasks.get.find.each do |task|
-    if task.note.get.match(JIRA_BASE_URL)
+    if !task.completed && task.note.get.match(JIRA_BASE_URL)
       # try to parse out jira id
       full_url= task.note.get
       jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")

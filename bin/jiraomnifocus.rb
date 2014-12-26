@@ -196,7 +196,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
   omnifocus_document = omnifocus_app.default_document
   ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
   ctx.tasks.get.find.each do |task|
-    if !task.completed && task.note.get.match(JIRA_BASE_URL)
+    if !task.completed.get && task.note.get.match(JIRA_BASE_URL)
       # try to parse out jira id
       full_url= task.note.get
       jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")

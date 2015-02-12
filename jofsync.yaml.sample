@@ -1,6 +1,6 @@
 ---
 jira:
-  hostname: 'example.atlassian.net'
+  hostname: 'http://example.atlassian.net'
   username: 'me'
   password: 'secret'
   context:  'Office'

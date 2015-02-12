@@ -78,7 +78,7 @@ unless opts[:password]
 end
 
 #JIRA Configuration
-JIRA_BASE_URL = 'https://' + opts[:hostname]
+JIRA_BASE_URL = opts[:hostname]
 USERNAME = opts[:username]
 PASSWORD = opts[:password]
 

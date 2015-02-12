@@ -126,7 +126,7 @@ def add_task(omnifocus_document, new_task_properties)
   # Check to see if there's already an OF Task with that name in the referenced Project
   # If there is, just stop.
   name   = new_task_properties["name"]
-  exists = proj.tasks.get.find { |t| t.name.get == name }
+  exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
   return false if exists
 
   # If there is a passed in OF context name, get the actual context object

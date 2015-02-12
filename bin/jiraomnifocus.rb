@@ -47,7 +47,7 @@ if  File.file?(ENV['HOME']+'/.jofsync.yaml')
 YAML CONFIG EXAMPLE
 ---
 jira:
-  hostname: 'example.atlassian.net'
+  hostname: 'http://example.atlassian.net'
   username: 'jdoe'
   password: 'blahblahblah'
   context: 'Jira'

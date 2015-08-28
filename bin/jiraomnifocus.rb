@@ -11,7 +11,7 @@ require 'keychain'
 opts = Trollop::options do
   banner ""
   banner <<-EOS
-Jira Omnifocus Sync Tool
+Jira OmniFocus Sync Tool
 
 Usage:
        jofsync [options]
@@ -79,7 +79,7 @@ JQL = URI::encode(QUERY)
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
 
-# This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
+# This method gets all issues that you are watching and whose resolution is Unresolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
 def get_issues
   jira_issues = Hash.new
   # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here

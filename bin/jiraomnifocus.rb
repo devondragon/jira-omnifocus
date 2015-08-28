@@ -49,9 +49,9 @@ jira:
   hostname: 'http://example.atlassian.net'
   username: 'jdoe'
   password: 'blahblahblah'
-  context: 'Jira'
-  project: 'Work'
-  filter: 'assignee = currentUser() AND status not in (Closed, Resolved) AND sprint in openSprints()'
+  context:  'Colleagues'
+  project:  'Jira'
+  filter:   'resolution = Unresolved and issue in watchedissues()'
 =end
 end
 

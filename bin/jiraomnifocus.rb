@@ -124,36 +124,40 @@ def add_task(omnifocus_document, new_task_properties)
   end
 
   # Check to see if there's already an OF Task with that name in the referenced Project
-  # If there is, just stop.
   name   = new_task_properties["name"]
-  exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-  return false if exists
+  flagged = new_task_properties["flagged"]
+  task = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
 
-  # If there is a passed in OF context name, get the actual context object
-  if new_task_properties['context']
-    ctx_name = new_task_properties["context"]
-    ctx = omnifocus_document.flattened_contexts[ctx_name]
-  end
-
-  # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
-  tprops = new_task_properties.inject({}) do |h, (k, v)|
-    h[:"#{k}"] = v
-    h
-  end
-
-  # Remove the project property from the new Task properties, as it won't be used like that.
-  tprops.delete(:project)
-  # Update the context property to be the actual context object not the context name
-  tprops[:context] = ctx if new_task_properties['context']
-
-  # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
+  if not task
+    ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
+    # If there is a passed in OF context name, get the actual context object (creating if necessary)
+    if ctx_name = new_task_properties["context"]
+      ctx = ctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == ctx_name } || ctx.make(:new => :context, :with_properties => {:name => ctx_name})
+    end
+    
+    # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
+    tprops = new_task_properties.inject({}) do |h, (k, v)|
+      h[:"#{k}"] = v
+      h
+    end
+    
+    # Remove the project property from the new Task properties, as it won't be used like that.
+    tprops.delete(:project)
+    # Update the context property to be the actual context object not the context name
+    tprops[:context] = ctx
+    
+    # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
 #  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
 
-  # Make a new Task in the Project
-  proj.make(:new => :task, :with_properties => tprops)
-
-  puts "task created"
-  return true
+    # Make a new Task in the Project
+    task = proj.make(:new => :task, :with_properties => tprops)
+    puts "task created"
+    return task
+  else
+    # Make sure the flag is set correctly.
+    task.flagged.set(flagged)
+    return task
+  end
 end
 
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
@@ -180,9 +184,10 @@ def add_jira_tickets_to_omnifocus ()
     @props = {}
     @props['name'] = task_name
     @props['project'] = DEFAULT_PROJECT
-    @props['context'] = DEFAULT_CONTEXT
+    @props['context'] = ticket["fields"]["reporter"]["name"]
     @props['note'] = task_notes
-    @props['flagged'] = FLAGGED
+    # Flag the task iff it's assigned to me.
+    @props['flagged'] = (ticket["fields"]["assignee"]["name"] == USERNAME)
     unless ticket["fields"]["duedate"].nil?
       @props["due_date"] = Date.parse(ticket["fields"]["duedate"])
     end
@@ -207,30 +212,18 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         request = Net::HTTP::Get.new(uri)
         request.basic_auth USERNAME, PASSWORD
         response = http.request request
-
-  if response.code =~ /20[0-9]{1}/
-            data = JSON.parse(response.body)
-            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-            resolution = data["fields"]["resolution"]
-            if resolution != nil
-              # if resolved, mark it as complete in OmniFocus
-              if task.completed.get != true
-                task.completed.set(true)
-                puts "task marked completed"
-              end
+        
+        if response.code =~ /20[0-9]{1}/
+          data = JSON.parse(response.body)
+          # Check to see if the Jira ticket has been resolved, if so mark it as complete.
+          resolution = data["fields"]["resolution"]
+          if resolution != nil
+            # if resolved, mark it as complete in OmniFocus
+            if task.completed.get != true
+              task.completed.set(true)
+              puts "task marked completed"
             end
-            # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
-            # It will be re-created if it is assigned back to you.
-            if ! data["fields"]["assignee"]
-              omnifocus_document.delete task
-              puts "task removed"
-            else
-              assignee = data["fields"]["assignee"]["name"]
-              if assignee != USERNAME
-                omnifocus_document.delete task
-                puts "task removed"
-              end
-            end
+          end
         else
          raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
         end
@@ -244,10 +237,10 @@ def app_is_running(app_name)
 end
 
 def main ()
-   if app_is_running("OmniFocus")
-	  add_jira_tickets_to_omnifocus
-	  mark_resolved_jira_tickets_as_complete_in_omnifocus
-   end
+  if app_is_running("OmniFocus")
+    add_jira_tickets_to_omnifocus
+    mark_resolved_jira_tickets_as_complete_in_omnifocus
+  end
 end
 
 main

@@ -26,6 +26,8 @@ You'll need to copy jofsync.yaml.sample from the git checkout to ~/.jofsync.yaml
 
 Make sure that you have a project and context in OmniFocus that match what you used in the configuration file.
 
+Your username and password for the Jira server must be defined in your keychain. Unlike previous versions of this script, your password is not stored in plain text.
+
 You can run the script manually or you can add a cron entry to run it periodically (it will take a minute or so to run so don't run it too often).
 
 You can use crontab -e to edit your user crontab and create an entry like this:

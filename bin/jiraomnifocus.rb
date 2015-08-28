@@ -6,6 +6,7 @@ Bundler.require(:default)
 require 'appscript'
 require 'yaml'
 require 'net/http'
+require 'keychain'
 
 opts = Trollop::options do
   banner ""
@@ -21,8 +22,6 @@ KNOWN ISSUES:
 ---
 EOS
   version 'jofsync 1.0.0'
-  opt :username, 'Jira Username', :type => :string, :short => 'u', :required => false
-  opt :password, 'Jira Password', :type => :string, :short => 'p', :required => false
   opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
   opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
   opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
@@ -47,15 +46,13 @@ YAML CONFIG EXAMPLE
 ---
 jira:
   hostname: 'http://example.atlassian.net'
-  username: 'jdoe'
-  password: 'blahblahblah'
   context:  'Colleagues'
   project:  'Jira'
   filter:   'resolution = Unresolved and issue in watchedissues()'
 =end
 end
 
-syms = [:username, :hostname, :context, :project, :filter]
+syms = [:hostname, :context, :project, :filter]
 syms.each { |x|
   unless opts[x]
     if config[:jira][x]
@@ -67,18 +64,13 @@ syms.each { |x|
  end
 }
 
-unless opts[:password]
-  if config[:jira][:password]
-    opts[:password] = config[:jira][:password]
-  else
-    opts[:password] = ask("password: ") {|q| q.echo = false}
-  end
-end
-
 #JIRA Configuration
 JIRA_BASE_URL = opts[:hostname]
-USERNAME = opts[:username]
-PASSWORD = opts[:password]
+
+host = URI(JIRA_BASE_URL).host
+keychainitem = Keychain.internet_passwords.where(:server => host).first
+USERNAME = keychainitem.account
+PASSWORD = keychainitem.password
 
 QUERY = opts[:filter]
 JQL = URI::encode(QUERY)

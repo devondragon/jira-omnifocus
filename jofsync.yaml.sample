@@ -1,8 +1,6 @@
 ---
 jira:
   hostname: 'http://example.atlassian.net'
-  username: 'me'
-  password: 'secret'
   context:  'Office'
   project:  'Jira'
   filter:   'resolution = Unresolved and issue in watchedissues()'

@@ -15,12 +15,18 @@ GEM
       minitest (~> 5.1)
       thread_safe (~> 0.1)
       tzinfo (~> 1.1)
+    corefoundation (0.2.0)
+      ffi
+    ffi (1.9.10)
     highline (1.6.21)
     i18n (0.6.11)
     json (1.8.1)
     minitest (5.4.0)
     oauth (0.4.7)
     rb-appscript (0.6.1)
+    ruby-keychain (0.3.2)
+      corefoundation (~> 0.2.0)
+      ffi
     thread_safe (0.3.4)
     trollop (2.0)
     tzinfo (1.2.2)
@@ -34,4 +40,8 @@ DEPENDENCIES
   jira-ruby!
   json
   rb-appscript
+  ruby-keychain
   trollop
+
+BUNDLED WITH
+   1.10.6

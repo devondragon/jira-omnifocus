@@ -26,7 +26,6 @@ EOS
   opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
   opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
   opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
-  opt :flag, 'Flag tasks in OF', :type => :boolean, :short => 'f', :required => false
   opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
   opt :quiet, 'Disable terminal output', :short => 'q', :default => true
 end
@@ -52,12 +51,11 @@ jira:
   password: 'blahblahblah'
   context: 'Jira'
   project: 'Work'
-  flag: true
   filter: 'assignee = currentUser() AND status not in (Closed, Resolved) AND sprint in openSprints()'
 =end
 end
 
-syms = [:username, :hostname, :context, :project, :flag, :filter]
+syms = [:username, :hostname, :context, :project, :filter]
 syms.each { |x|
   unless opts[x]
     if config[:jira][x]
@@ -88,7 +86,6 @@ JQL = URI::encode(QUERY)
 #OmniFocus Configuration
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
-FLAGGED = opts[:flag]
 
 # This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
 def get_issues

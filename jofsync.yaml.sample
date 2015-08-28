@@ -5,5 +5,4 @@ jira:
   password: 'secret'
   context:  'Office'
   project:  'Jira'
-  flag:     true
-  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
+  filter:   'resolution = Unresolved and issue in watchedissues()'

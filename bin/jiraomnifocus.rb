@@ -173,7 +173,8 @@ def add_jira_tickets_to_omnifocus ()
     @props = {}
     @props['name'] = task_name
     @props['project'] = DEFAULT_PROJECT
-    @props['context'] = ticket["fields"]["reporter"]["name"]
+#   @props['context'] = ticket["fields"]["reporter"]["displayName"]
+    @props['context'] = ticket["fields"]["reporter"]["displayName"].split(", ").reverse.join(" ")
     @props['note'] = task_notes
     # Flag the task iff it's assigned to me.
     @props['flagged'] = (ticket["fields"]["assignee"]["name"] == USERNAME)

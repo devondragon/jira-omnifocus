@@ -13,9 +13,5 @@
       <integer>300</integer>
     <key>Debug</key>
       <false/>
-    <key>AbandonProcessGroup</key>
-      <true/>
-    <key>ProcessType</key>
-      <string>Interactive</string>
   </dict>
 </plist>

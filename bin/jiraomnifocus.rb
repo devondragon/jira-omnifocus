@@ -190,32 +190,35 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
   omnifocus_app = Appscript.app.by_name("OmniFocus")
   omnifocus_document = omnifocus_app.default_document
   ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
-  ctx.tasks.get.find.each do |task|
-    if !task.completed.get && task.note.get.match(JIRA_BASE_URL)
-      # try to parse out jira id
-      full_url= task.note.get
-      jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
-      # check status of the jira
-      uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
-
-      Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-        request = Net::HTTP::Get.new(uri)
-        request.basic_auth USERNAME, PASSWORD
-        response = http.request request
+  ctx.flattened_contexts.get.each do |ctx|
+    tasks = ctx.tasks.get
+    tasks.each do |task|
+      if !task.completed.get && task.note.get.match(JIRA_BASE_URL)
+        # try to parse out jira id
+        full_url= task.note.get
+        jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
+        # check status of the jira
+        uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
         
-        if response.code =~ /20[0-9]{1}/
-          data = JSON.parse(response.body)
-          # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-          status = data["fields"]["status"]
-          if ['Closed', 'Resolved'].include? status
-            # if resolved, mark it as complete in OmniFocus
-            if task.completed.get != true
-              task.completed.set(true)
-              puts "task marked completed"
+        Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+          request = Net::HTTP::Get.new(uri)
+          request.basic_auth USERNAME, PASSWORD
+          response = http.request request
+          
+          if response.code =~ /20[0-9]{1}/
+            data = JSON.parse(response.body)
+            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
+            status = data["fields"]["status"]
+            if ['Closed', 'Resolved'].include? status["name"]
+              # if resolved, mark it as complete in OmniFocus
+              if task.completed.get != true
+                task.completed.set(true)
+                puts "task marked completed"
+              end
             end
+          else
+            raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
           end
-        else
-         raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
         end
       end
     end

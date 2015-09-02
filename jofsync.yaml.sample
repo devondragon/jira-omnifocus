@@ -3,4 +3,4 @@ jira:
   hostname: 'http://example.atlassian.net'
   context:  'Office'
   project:  'Jira'
-  filter:   'resolution = Unresolved and issue in watchedissues()'
+  filter:   'status != Closed and status != Resolved and issue in watchedissues()'

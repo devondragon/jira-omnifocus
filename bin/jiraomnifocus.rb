@@ -177,7 +177,7 @@ def add_jira_tickets_to_omnifocus ()
     @props['context'] = ticket["fields"]["reporter"]["displayName"].split(", ").reverse.join(" ")
     @props['note'] = task_notes
     # Flag the task iff it's assigned to me.
-    @props['flagged'] = (ticket["fields"]["assignee"]["name"] == USERNAME)
+    @props['flagged'] = (not ticket["fields"]["assignee"].nil? and (ticket["fields"]["assignee"]["name"] == USERNAME))
     unless ticket["fields"]["duedate"].nil?
       @props["due_date"] = Date.parse(ticket["fields"]["duedate"])
     end
@@ -206,8 +206,8 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         if response.code =~ /20[0-9]{1}/
           data = JSON.parse(response.body)
           # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-          resolution = data["fields"]["resolution"]
-          if resolution != nil
+          status = data["fields"]["status"]
+          if ['Closed', 'Resolved'].include? status
             # if resolved, mark it as complete in OmniFocus
             if task.completed.get != true
               task.completed.set(true)

@@ -1,9 +1,6 @@
 ---
 jira:
   hostname: 'http://example.atlassian.net'
-  username: 'me'
-  password: 'secret'
   context:  'Office'
   project:  'Jira'
-  flag:     true
-  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
+  filter:   'status != Closed and status != Resolved and issue in watchedissues()'

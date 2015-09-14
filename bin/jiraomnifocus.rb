@@ -71,7 +71,13 @@ JIRA_BASE_URL = opts[:hostname]
 host = URI(JIRA_BASE_URL).host
 keychainitem = Keychain.internet_passwords.where(:server => host).first
 USERNAME = keychainitem.account
-PASSWORD = keychainitem.password
+JIRACLIENT = JIRA::Client.new({
+                                :username => USERNAME,
+                                :password => keychainitem.password,
+                                :site     => JIRA_BASE_URL,
+                                :context_path => '',
+                                :auth_type => :basic
+                              })
 
 QUERY = opts[:filter]
 JQL = URI::encode(QUERY)
@@ -79,19 +85,6 @@ JQL = URI::encode(QUERY)
 #OmniFocus Configuration
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
-
-# This method gets all issues that you are watching and whose resolution is Unresolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
-def get_issues
-  jira_issues = Hash.new
-  client = JIRA::Client.new({
-            :username => USERNAME,
-            :password => PASSWORD,
-            :site     => JIRA_BASE_URL,
-            :context_path => '',
-            :auth_type => :basic
-  })
-  return client.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee'])
-end
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, new_task_properties)
@@ -141,7 +134,7 @@ end
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
-  results = get_issues
+  results = JIRACLIENT.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee'])
   if results.nil?
     puts "No results from Jira"
     exit
@@ -187,14 +180,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         # try to parse out jira id
         full_url= task.note.get
         jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
-        client = JIRA::Client.new({
-                                    :username => USERNAME,
-                                    :password => PASSWORD,
-                                    :site     => JIRA_BASE_URL,
-                                    :context_path => '',
-                                    :auth_type => :basic
-                                  })
-        ticket = client.Issue.find(jira_id)
+        ticket = JIRACLIENT.Issue.find(jira_id)
         status = ticket.fields["status"]
         if ['Closed', 'Resolved'].include? status["name"]
           # if resolved, mark it as complete in OmniFocus

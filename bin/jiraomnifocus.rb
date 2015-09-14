@@ -5,7 +5,6 @@ Bundler.require(:default)
 
 require 'appscript'
 require 'yaml'
-require 'net/http'
 require 'keychain'
 require 'jira'
 

@@ -187,27 +187,20 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         # try to parse out jira id
         full_url= task.note.get
         jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
-        # check status of the jira
-        uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
-        
-        Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-          request = Net::HTTP::Get.new(uri)
-          request.basic_auth USERNAME, PASSWORD
-          response = http.request request
-          
-          if response.code =~ /20[0-9]{1}/
-            data = JSON.parse(response.body)
-            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-            status = data["fields"]["status"]
-            if ['Closed', 'Resolved'].include? status["name"]
-              # if resolved, mark it as complete in OmniFocus
-              if task.completed.get != true
-                task.completed.set(true)
-                puts "task marked completed"
-              end
-            end
-          else
-            raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+        client = JIRA::Client.new({
+                                    :username => USERNAME,
+                                    :password => PASSWORD,
+                                    :site     => JIRA_BASE_URL,
+                                    :context_path => '',
+                                    :auth_type => :basic
+                                  })
+        ticket = client.Issue.find(jira_id)
+        status = ticket.fields["status"]
+        if ['Closed', 'Resolved'].include? status["name"]
+          # if resolved, mark it as complete in OmniFocus
+          if task.completed.get != true
+            task.completed.set(true)
+            puts "task marked completed"
           end
         end
       end

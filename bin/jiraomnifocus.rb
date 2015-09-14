@@ -71,13 +71,13 @@ JIRA_BASE_URL = opts[:hostname]
 host = URI(JIRA_BASE_URL).host
 keychainitem = Keychain.internet_passwords.where(:server => host).first
 USERNAME = keychainitem.account
-JIRACLIENT = JIRA::Client.new({
-                                :username => USERNAME,
-                                :password => keychainitem.password,
-                                :site     => JIRA_BASE_URL,
-                                :context_path => '',
-                                :auth_type => :basic
-                              })
+JIRACLIENT = JIRA::Client.new(
+  :username => USERNAME,
+  :password => keychainitem.password,
+  :site     => JIRA_BASE_URL,
+  :context_path => '',
+  :auth_type => :basic
+)
 
 QUERY = opts[:filter]
 JQL = URI::encode(QUERY)

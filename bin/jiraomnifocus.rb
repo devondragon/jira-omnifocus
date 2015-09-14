@@ -134,7 +134,7 @@ end
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
-  results = JIRACLIENT.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee'])
+  results = JIRACLIENT.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee', 'duedate'])
   if results.nil?
     puts "No results from Jira"
     exit

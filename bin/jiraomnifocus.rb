@@ -7,6 +7,7 @@ require 'appscript'
 require 'yaml'
 require 'net/http'
 require 'keychain'
+require 'jira'
 
 opts = Trollop::options do
   banner ""
@@ -82,26 +83,14 @@ DEFAULT_PROJECT = opts[:project]
 # This method gets all issues that you are watching and whose resolution is Unresolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
 def get_issues
   jira_issues = Hash.new
-  # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=' + JQL)
-
-  Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-    request = Net::HTTP::Get.new(uri)
-    request.basic_auth USERNAME, PASSWORD
-    response = http.request request
-    # If the response was good, then grab the data
-    if response.code =~ /20[0-9]{1}/
-        data = JSON.parse(response.body)
-        data["issues"].each do |item|
-          jira_id = item["key"]
-#          jira_issues[jira_id] = item["fields"]["summary"]
-          jira_issues[jira_id] = item
-        end
-    else
-     raise StandardError, "Unsuccessful HTTP response code: " + response.code
-    end
-  end
-  return jira_issues
+  client = JIRA::Client.new({
+            :username => USERNAME,
+            :password => PASSWORD,
+            :site     => JIRA_BASE_URL,
+            :context_path => '',
+            :auth_type => :basic
+  })
+  return client.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee'])
 end
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
@@ -163,9 +152,10 @@ def add_jira_tickets_to_omnifocus ()
   omnifocus_document = omnifocus_app.default_document
 
   # Iterate through resulting issues.
-  results.each do |jira_id, ticket|
+  results.each do |ticket|
+    jira_id = ticket.key
     # Create the task name by adding the ticket summary to the jira ticket key
-    task_name = "#{jira_id}: #{ticket["fields"]["summary"]}"
+    task_name = "#{jira_id}: #{ticket.summary}"
     # Create the task notes with the Jira Ticket URL
     task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
     
@@ -173,13 +163,13 @@ def add_jira_tickets_to_omnifocus ()
     @props = {}
     @props['name'] = task_name
     @props['project'] = DEFAULT_PROJECT
-#   @props['context'] = ticket["fields"]["reporter"]["displayName"]
-    @props['context'] = ticket["fields"]["reporter"]["displayName"].split(", ").reverse.join(" ")
+#   @props['context'] = ticket.fields["reporter"]["displayName"]
+    @props['context'] = ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" ")
     @props['note'] = task_notes
     # Flag the task iff it's assigned to me.
-    @props['flagged'] = ((not ticket["fields"]["assignee"].nil?) and (ticket["fields"]["assignee"]["name"] == USERNAME))
-    unless ticket["fields"]["duedate"].nil?
-      @props["due_date"] = Date.parse(ticket["fields"]["duedate"])
+    @props['flagged'] = ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME))
+    unless ticket.fields["duedate"].nil?
+      @props["due_date"] = Date.parse(ticket.fields["duedate"])
     end
     add_task(omnifocus_document, @props)
   end

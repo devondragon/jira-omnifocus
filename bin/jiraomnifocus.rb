@@ -67,14 +67,17 @@ syms.each { |x|
 #JIRA Configuration
 JIRA_BASE_URL = opts[:hostname]
 
-host = URI(JIRA_BASE_URL).host
+uri = URI(JIRA_BASE_URL)
+host = uri.host
+path = uri.path
+uri.path = ''
 keychainitem = Keychain.internet_passwords.where(:server => host).first
 USERNAME = keychainitem.account
 JIRACLIENT = JIRA::Client.new(
   :username => USERNAME,
   :password => keychainitem.password,
-  :site     => JIRA_BASE_URL,
-  :context_path => '',
+  :site     => uri.to_s,
+  :context_path => path,
   :auth_type => :basic
 )
 

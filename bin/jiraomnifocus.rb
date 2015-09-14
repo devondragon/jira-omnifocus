@@ -149,18 +149,21 @@ def add_jira_tickets_to_omnifocus ()
     jira_id = ticket.key
     # Create the task name by adding the ticket summary to the jira ticket key
     task_name = "#{jira_id}: #{ticket.summary}"
+    # Base context on the reporter
+#    task_context = ticket.fields["reporter"]["displayName"]
+    task_context = ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" ")
     # Create the task notes with the Jira Ticket URL
     task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
-    
+    # Flag the task iff it's assigned to me.
+    task_flagged = ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME))
+
     # Build properties for the Task
     @props = {}
     @props['name'] = task_name
     @props['project'] = DEFAULT_PROJECT
-#   @props['context'] = ticket.fields["reporter"]["displayName"]
-    @props['context'] = ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" ")
+    @props['context'] = task_context
     @props['note'] = task_notes
-    # Flag the task iff it's assigned to me.
-    @props['flagged'] = ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME))
+    @props['flagged'] = task_flagged
     unless ticket.fields["duedate"].nil?
       @props["due_date"] = Date.parse(ticket.fields["duedate"])
     end

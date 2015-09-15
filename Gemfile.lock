@@ -21,16 +21,23 @@ GEM
     highline (1.6.21)
     i18n (0.6.11)
     json (1.8.1)
+    macaddr (1.7.1)
+      systemu (~> 2.6.2)
     minitest (5.4.0)
     oauth (0.4.7)
     rb-appscript (0.6.1)
+    ruby-growl (4.1)
+      uuid (~> 2.3, >= 2.3.5)
     ruby-keychain (0.3.2)
       corefoundation (~> 0.2.0)
       ffi
+    systemu (2.6.5)
     thread_safe (0.3.4)
     trollop (2.0)
     tzinfo (1.2.2)
       thread_safe (~> 0.1)
+    uuid (2.3.8)
+      macaddr (~> 1.0)
 
 PLATFORMS
   ruby
@@ -40,6 +47,7 @@ DEPENDENCIES
   jira-ruby!
   json
   rb-appscript
+  ruby-growl
   ruby-keychain
   trollop
 

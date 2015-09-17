@@ -11,6 +11,8 @@ It pulls back all unresolved Jira tickets that you are watching and if it hasn't
 
 It also checks all the OmniFocus tasks that look like they are related to Jira tickets, and checks to see if the matching ticket has been resolved.  If so, it marks the task as complete. If a task has been re-assigned to someone else or unassigned it will no longer be flagged.
 
+Notifications are sent via Growl about status changes.
+
 Very simple.  The Ruby code is straight forward and it should be easy to modify to do other things to meet your specific needs.
 
 This uses [Bundler](http://bundler.io/), so you will need to run the following to set everything up.

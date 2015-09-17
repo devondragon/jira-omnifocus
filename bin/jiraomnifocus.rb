@@ -40,9 +40,12 @@ class Hash
   end
 end
 
-Growler = Growl.new "localhost", "ruby-growl"
-Growler.add_notification Pathname.new($0).basename
-
+Growler = Growl.new "localhost", Pathname.new($0).basename
+Growler.add_notification 'Error'
+Growler.add_notification 'No Results'
+Growler.add_notification 'Task Created'
+Growler.add_notification 'Task Not Completed'
+Growler.add_notification 'Task Completed'
 
 if  File.file?(ENV['HOME']+'/.jofsync.yaml')
   config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
@@ -64,7 +67,7 @@ syms.each { |x|
     if config[:jira][x]
       opts[x] = config[:jira][x]
     else
-      Growler.notify Pathname.new($0).basename, Pathname.new($0).basename, 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
+      Growler.notify 'Error', Pathname.new($0).basename, 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
       exit 1
     end
  end
@@ -130,14 +133,14 @@ def add_task(omnifocus_document, new_task_properties)
 
     # Make a new Task in the Project
     task = proj.make(:new => :task, :with_properties => tprops)
-    Growler.notify Pathname.new($0).basename, name, "OmniFocus task created"
+    Growler.notify 'Task Created', name, 'OmniFocus task created'
     return task
   else
     # Make sure the flag is set correctly.
     task.flagged.set(flagged)
     if task.completed.get == true
       task.completed.set(false)
-      Growler.notify Pathname.new($0).basename, task.name.get, "OmniFocus task no longer marked completed"
+      Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
     end
     task.completed.set(false)
     return task
@@ -149,7 +152,7 @@ def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
   results = JIRACLIENT.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee', 'duedate'])
   if results.nil?
-    Growler.notify Pathname.new($0).basename, Pathname.new($0).basename, "No results from Jira"
+    Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
 
@@ -202,7 +205,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
           # if resolved, mark it as complete in OmniFocus
           if task.completed.get == false
             task.completed.set(true)
-            Growler.notify Pathname.new($0).basename, task.name.get, "OmniFocus task marked completed"
+            Growler.notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
           end
         end
       end

@@ -135,6 +135,11 @@ def add_task(omnifocus_document, new_task_properties)
   else
     # Make sure the flag is set correctly.
     task.flagged.set(flagged)
+    if task.completed.get == true
+      task.completed.set(false)
+      Growler.notify Pathname.new($0).basename, task.name.get, "OmniFocus task no longer marked completed"
+    end
+    task.completed.set(false)
     return task
   end
 end
@@ -195,9 +200,9 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         status = ticket.fields["status"]
         if ['Closed', 'Resolved'].include? status["name"]
           # if resolved, mark it as complete in OmniFocus
-          if task.completed.get != true
+          if task.completed.get == false
             task.completed.set(true)
-            Growler.notify Pathname.new($0).basename, jira_id, "OmniFocus task marked completed"
+            Growler.notify Pathname.new($0).basename, task.name.get, "OmniFocus task marked completed"
           end
         end
       end

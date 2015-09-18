@@ -28,7 +28,7 @@ EOS
   opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
   opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
   opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
-  opt :quiet, 'Disable Growl alerts', :short => 'q', :default => true
+  opt :quiet, 'Disable alerts', :short => 'q', :default => true
 end
 
 class Hash
@@ -70,7 +70,7 @@ syms.each { |x|
     if config[:jira][x]
       opts[x] = config[:jira][x]
     else
-      QUIET or Growler.notify 'Error', Pathname.new($0).basename, 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
+      QUIET or Growler.notify 'Error', Pathname.new($0).basename, "Please provide a #{x.to_s} value on the CLI or in the config file."
       exit 1
     end
  end

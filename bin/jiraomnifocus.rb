@@ -10,27 +10,6 @@ require 'jira'
 require 'ruby-growl'
 require 'pathname'
 
-opts = Trollop::options do
-  banner ""
-  banner <<-EOS
-Jira OmniFocus Sync Tool
-
-Usage:
-       jofsync [options]
-
-KNOWN ISSUES:
-      * With long names you must use an equal sign ( i.e. --hostname=test-target-1 )
-
----
-EOS
-  version 'jofsync 1.1.0'
-  opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
-  opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
-  opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
-  opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
-  opt :quiet, 'Disable alerts', :short => 'q', :default => false
-end
-
 class Hash
   #take keys of hash and transform those to a symbols
   def self.transform_keys_to_symbols(value)
@@ -38,17 +17,6 @@ class Hash
     hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = Hash.transform_keys_to_symbols(v); memo}
     return hash
   end
-end
-
-QUIET = opts[:quiet]
-unless QUIET 
-  Growler = Growl.new "localhost", Pathname.new($0).basename
-  Growler.add_notification 'Error'
-  Growler.add_notification 'No Results'
-  Growler.add_notification 'Context Created'
-  Growler.add_notification 'Task Created'
-  Growler.add_notification 'Task Not Completed'
-  Growler.add_notification 'Task Completed'
 end
 
 if  File.file?(ENV['HOME']+'/.jofsync.yaml')
@@ -65,17 +33,37 @@ jira:
 =end
 end
 
-syms = [:hostname, :context, :project, :filter]
-syms.each { |x|
-  unless opts[x]
-    if config[:jira][x]
-      opts[x] = config[:jira][x]
-    else
-      QUIET or Growler.notify 'Error', Pathname.new($0).basename, "Please provide a #{x.to_s} value on the CLI or in the config file."
-      exit 1
-    end
- end
-}
+opts = Trollop::options do
+  banner ""
+  banner <<-EOS
+Jira OmniFocus Sync Tool
+
+Usage:
+       jofsync [options]
+
+KNOWN ISSUES:
+      * With long names you must use an equal sign ( i.e. --hostname=test-target-1 )
+
+---
+EOS
+  version 'jofsync 1.1.0'
+  opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :default => config[:jira][:hostname]
+  opt :context, 'OF Default Context', :type => :string, :short => 'c', :default => config[:jira][:context]
+  opt :project, 'OF Default Project', :type => :string, :short => 'r', :default => config[:jira][:project]
+  opt :filter, 'JQL Filter', :type => :string, :short => 'j', :default => config[:jira][:filter]
+  opt :quiet, 'Disable alerts', :short => 'q', :default => config[:jira][:quiet]
+end
+
+QUIET = opts[:quiet]
+unless QUIET 
+  Growler = Growl.new "localhost", Pathname.new($0).basename
+  Growler.add_notification 'Error'
+  Growler.add_notification 'No Results'
+  Growler.add_notification 'Context Created'
+  Growler.add_notification 'Task Created'
+  Growler.add_notification 'Task Not Completed'
+  Growler.add_notification 'Task Completed'
+end
 
 #JIRA Configuration
 JIRA_BASE_URL = opts[:hostname]
@@ -159,7 +147,8 @@ end
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
-  results = JIRACLIENT.Issue.jql(QUERY, fields: ['summary', 'reporter', 'assignee', 'duedate'])
+  fields = ['summary', 'reporter', 'assignee', 'duedate']
+  results = JIRACLIENT.Issue.jql(QUERY, fields: fields)
   if results.nil?
     QUIET or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit

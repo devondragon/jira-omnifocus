@@ -28,7 +28,7 @@ EOS
   opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
   opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
   opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
-  opt :quiet, 'Disable alerts', :short => 'q', :default => true
+  opt :quiet, 'Disable alerts', :short => 'q', :default => false
 end
 
 class Hash
@@ -45,6 +45,7 @@ unless QUIET
   Growler = Growl.new "localhost", Pathname.new($0).basename
   Growler.add_notification 'Error'
   Growler.add_notification 'No Results'
+  Growler.add_notification 'Context Created'
   Growler.add_notification 'Task Created'
   Growler.add_notification 'Task Not Completed'
   Growler.add_notification 'Task Completed'
@@ -113,11 +114,25 @@ def add_task(omnifocus_document, new_task_properties)
   flagged = new_task_properties["flagged"]
   task = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
 
-  if not task
-    ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
+  if task
+    # Make sure the flag is set correctly.
+    task.flagged.set(flagged)
+    if task.completed.get == true
+      task.completed.set(false)
+      QUIET or Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
+    end
+    task.completed.set(false)
+    return task
+  else
+    defaultctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
     # If there is a passed in OF context name, get the actual context object (creating if necessary)
     if ctx_name = new_task_properties["context"]
-      ctx = ctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == ctx_name } || ctx.make(:new => :context, :with_properties => {:name => ctx_name})
+      unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == ctx_name }
+        ctx = defaultctx.make(:new => :context, :with_properties => {:name => ctx_name})
+        QUIET or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{ctx_name}", 'OmniFocus context created'
+      end
+    else
+      ctx = defaultctx
     end
     
     # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
@@ -137,15 +152,6 @@ def add_task(omnifocus_document, new_task_properties)
     # Make a new Task in the Project
     task = proj.make(:new => :task, :with_properties => tprops)
     QUIET or Growler.notify 'Task Created', name, 'OmniFocus task created'
-    return task
-  else
-    # Make sure the flag is set correctly.
-    task.flagged.set(flagged)
-    if task.completed.get == true
-      task.completed.set(false)
-      QUIET or Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
-    end
-    task.completed.set(false)
     return task
   end
 end

@@ -51,6 +51,7 @@ EOS
   opt :context, 'OF Default Context', :type => :string, :short => 'c', :default => config[:jira][:context]
   opt :project, 'OF Default Project', :type => :string, :short => 'r', :default => config[:jira][:project]
   opt :filter, 'JQL Filter', :type => :string, :short => 'j', :default => config[:jira][:filter]
+  opt :parenttaskfield, 'Field to use in identifying parent tasks', :default => config[:jira][:parenttaskfield]
   opt :quiet, 'Disable alerts', :short => 'q', :default => config[:jira][:quiet]
 end
 
@@ -89,6 +90,8 @@ JQL = URI::encode(QUERY)
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
 
+ParentTaskField = opts[:parenttaskfield]
+
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, new_task_properties)
   # If there is a passed in OF project name, get the actual project object
@@ -100,7 +103,7 @@ def add_task(omnifocus_document, new_task_properties)
   # Check to see if there's already an OF Task with that name in the referenced Project
   name   = new_task_properties["name"]
   flagged = new_task_properties["flagged"]
-  task = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+  task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
 
   if task
     # Make sure the flag is set correctly.
@@ -122,8 +125,22 @@ def add_task(omnifocus_document, new_task_properties)
     else
       ctx = defaultctx
     end
-    
+
+    # If there is a passed in parent task, get the actual parent task object (creating if necessary)
+    if parent_name = new_task_properties['parent_task']
+      unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_name }
+        parent = proj.make(:new => :task,
+                           :with_properties => {:name => parent_name,
+                                                :sequential => false,
+                                                :completed_by_children => true})
+        QUIET or Growler.notify 'Task Created', parent_name, 'OmniFocus task created'
+      end
+      # Remove the parent task property, as it won't be used like that.
+      new_task_properties.delete("parent_task")
+    end
+
     # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
+    # It converts strings into keys
     tprops = new_task_properties.inject({}) do |h, (k, v)|
       h[:"#{k}"] = v
       h
@@ -138,7 +155,9 @@ def add_task(omnifocus_document, new_task_properties)
 #  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
 
     # Make a new Task in the Project
-    task = proj.make(:new => :task, :with_properties => tprops)
+    task = proj.make(:new => :task,
+                     :at => parent,
+                     :with_properties => tprops)
     QUIET or Growler.notify 'Task Created', name, 'OmniFocus task created'
     return task
   end
@@ -148,6 +167,9 @@ end
 def add_jira_tickets_to_omnifocus ()
   # Get the open Jira issues assigned to you
   fields = ['summary', 'reporter', 'assignee', 'duedate']
+  if ParentTaskField
+    fields.push ParentTaskField
+  end
   results = JIRACLIENT.Issue.jql(QUERY, fields: fields)
   if results.nil?
     QUIET or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
@@ -170,14 +192,16 @@ def add_jira_tickets_to_omnifocus ()
     task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
     # Flag the task iff it's assigned to me.
     task_flagged = ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME))
-
+    # Get parent task, if any
+    task_parent = ticket.fields[ParentTaskField]
     # Build properties for the Task
-    @props = {}
-    @props['name'] = task_name
-    @props['project'] = DEFAULT_PROJECT
-    @props['context'] = task_context
-    @props['note'] = task_notes
-    @props['flagged'] = task_flagged
+    @props = {'name' => task_name,
+              'project' => DEFAULT_PROJECT,
+              'context' => task_context,
+              'note' => task_notes,
+              'flagged' => task_flagged,
+              'parent_task' => task_parent,
+             }
     unless ticket.fields["duedate"].nil?
       @props["due_date"] = Date.parse(ticket.fields["duedate"])
     end

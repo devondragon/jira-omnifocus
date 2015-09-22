@@ -95,14 +95,14 @@ ParentTaskField = opts[:parenttaskfield]
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, new_task_properties)
   # If there is a passed in OF project name, get the actual project object
-  if new_task_properties['project']
-    proj_name = new_task_properties["project"]
+  if new_task_properties[:project]
+    proj_name = new_task_properties[:project]
     proj = omnifocus_document.flattened_tasks[proj_name]
   end
 
   # Check to see if there's already an OF Task with that name in the referenced Project
-  name   = new_task_properties["name"]
-  flagged = new_task_properties["flagged"]
+  name   = new_task_properties[:name]
+  flagged = new_task_properties[:flagged]
   task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
 
   if task
@@ -117,7 +117,7 @@ def add_task(omnifocus_document, new_task_properties)
   else
     defaultctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
     # If there is a passed in OF context name, get the actual context object (creating if necessary)
-    if ctx_name = new_task_properties["context"]
+    if ctx_name = new_task_properties[:context]
       unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == ctx_name }
         ctx = defaultctx.make(:new => :context, :with_properties => {:name => ctx_name})
         QUIET or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{ctx_name}", 'OmniFocus context created'
@@ -127,7 +127,7 @@ def add_task(omnifocus_document, new_task_properties)
     end
 
     # If there is a passed in parent task, get the actual parent task object (creating if necessary)
-    if parent_name = new_task_properties['parent_task']
+    if parent_name = new_task_properties[:parent_task]
       unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_name }
         parent = proj.make(:new => :task,
                            :with_properties => {:name => parent_name,
@@ -136,28 +136,21 @@ def add_task(omnifocus_document, new_task_properties)
         QUIET or Growler.notify 'Task Created', parent_name, 'OmniFocus task created'
       end
       # Remove the parent task property, as it won't be used like that.
-      new_task_properties.delete("parent_task")
-    end
-
-    # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
-    # It converts strings into keys
-    tprops = new_task_properties.inject({}) do |h, (k, v)|
-      h[:"#{k}"] = v
-      h
+      new_task_properties.delete(:parent_task)
     end
     
     # Remove the project property from the new Task properties, as it won't be used like that.
-    tprops.delete(:project)
+    new_task_properties.delete(:project)
     # Update the context property to be the actual context object not the context name
-    tprops[:context] = ctx
+    new_task_properties[:context] = ctx
     
     # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
+#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => new_task_properties)
 
     # Make a new Task in the Project
     task = proj.make(:new => :task,
                      :at => parent,
-                     :with_properties => tprops)
+                     :with_properties => new_task_properties)
     QUIET or Growler.notify 'Task Created', name, 'OmniFocus task created'
     return task
   end
@@ -183,30 +176,24 @@ def add_jira_tickets_to_omnifocus ()
   # Iterate through resulting issues.
   results.each do |ticket|
     jira_id = ticket.key
-    # Create the task name by adding the ticket summary to the jira ticket key
-    task_name = "#{jira_id}: #{ticket.summary}"
-    # Base context on the reporter
-#    task_context = ticket.fields["reporter"]["displayName"]
-    task_context = ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" ")
-    # Create the task notes with the Jira Ticket URL
-    task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
-    # Flag the task iff it's assigned to me.
-    task_flagged = ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME))
-    # Get parent task, if any
-    task_parent = ticket.fields[ParentTaskField]
-    # Build properties for the Task
-    @props = {'name' => task_name,
-              'project' => DEFAULT_PROJECT,
-              'context' => task_context,
-              'note' => task_notes,
-              'flagged' => task_flagged,
-              'parent_task' => task_parent,
-             }
-    unless ticket.fields["duedate"].nil?
-      @props["due_date"] = Date.parse(ticket.fields["duedate"])
-    end
-    add_task(omnifocus_document, @props)
+    add_task(omnifocus_document,
+             # Create the task name by adding the ticket summary to the jira ticket key
+             name: "#{jira_id}: #{ticket.summary}",
+             project: DEFAULT_PROJECT,
+             # Base context on the reporter
+             #context: ticket.fields["reporter"]["displayName"]
+             context: ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" "),
+             # Create the task notes with the Jira Ticket URL
+             note: "#{JIRA_BASE_URL}/browse/#{jira_id}",
+             # Flag the task iff it's assigned to me.
+             flagged: ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME)),
+             # Get parent task, if any
+             parent_task: ticket.fields[ParentTaskField],
+             # Get due date, if any
+             due_date: (ticket.fields["duedate"] && Date.parse(ticket.fields["duedate"])),
+            )
   end
+
 end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus ()

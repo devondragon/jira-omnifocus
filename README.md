@@ -9,6 +9,8 @@ What it does:
 
 It pulls back all unresolved Jira tickets that you are watching and if it hasn't already created a OmniFocus task for that ticket, it creates a new one.  The title of the task is the Jira ticket number followed by the summary from the ticket.  The note part of the OmniFocus task will contain the URL to the Jira ticket so you can easily go right to it.  I chose not to pull over the full description, or comment history into the task notes as it's usually more than I want to see in OmniFocus. If the ticket is assigned to you, it will be flagged. The context will be set based on who generated the ticket.  If there is no existing context, one will be created.
 
+You can define a parenttaskfield and if you do so, tasks will be grouped under parent tasks as defined by the field.  For example, in our Jira, customfield_10040 contains the company name of the customer who this work is for.  By defining this, each ticket is put under a parent task for the company.  The parent task will be completed automatically when all the tickets under it are completed.
+
 It also checks all the OmniFocus tasks that look like they are related to Jira tickets, and checks to see if the matching ticket has been resolved.  If so, it marks the task as complete. If a task has been re-assigned to someone else or unassigned it will no longer be flagged.
 
 Notifications are sent via Growl about status changes.

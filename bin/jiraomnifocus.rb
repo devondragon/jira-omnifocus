@@ -181,16 +181,16 @@ def add_jira_tickets_to_omnifocus ()
              name: "#{jira_id}: #{ticket.summary}",
              project: DEFAULT_PROJECT,
              # Base context on the reporter
-             #context: ticket.fields["reporter"]["displayName"]
-             context: ticket.fields["reporter"]["displayName"].split(", ").reverse.join(" "),
+             #context: ticket.reporter.attrs["displayName"]
+             context: ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),
              # Create the task notes with the Jira Ticket URL
              note: "#{JIRA_BASE_URL}/browse/#{jira_id}",
              # Flag the task iff it's assigned to me.
-             flagged: ((not ticket.fields["assignee"].nil?) and (ticket.fields["assignee"]["name"] == USERNAME)),
+             flagged: ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == USERNAME),
              # Get parent task, if any
              parent_task: ticket.fields[ParentTaskField],
              # Get due date, if any
-             due_date: (ticket.fields["duedate"] && Date.parse(ticket.fields["duedate"])),
+             due_date: (ticket.duedate && Date.parse(ticket.duedate))
             )
   end
 

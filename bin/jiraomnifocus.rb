@@ -94,10 +94,7 @@ ParentTaskField = opts[:parenttaskfield]
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **new_task_properties)
-  # If there is a passed in OF project name, get the actual project object
-  if project
-    proj = omnifocus_document.flattened_tasks[project]
-  end
+  proj = omnifocus_document.flattened_tasks[project || DEFAULT_PROJECT]
 
   # Check to see if there's already an OF Task with that name in the referenced Project
   if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
@@ -170,7 +167,6 @@ def add_jira_tickets_to_omnifocus ()
     add_task(omnifocus_document,
              # Create the task name by adding the ticket summary to the jira ticket key
              name: "#{jira_id}: #{ticket.summary}",
-             project: DEFAULT_PROJECT,
              # Base context on the reporter
              #context: ticket.reporter.attrs["displayName"]
              context: ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),

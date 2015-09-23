@@ -100,13 +100,9 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
   end
 
   # Check to see if there's already an OF Task with that name in the referenced Project
-  name   = new_task_properties[:name]
-  flagged = new_task_properties[:flagged]
-  task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-
-  if task
+  if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
     # Make sure the flag is set correctly.
-    task.flagged.set(flagged)
+    task.flagged.set(new_task_properties[:flagged])
     if task.completed.get == true
       task.completed.set(false)
       QUIET or Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"

@@ -68,29 +68,12 @@ end
 
 #JIRA Configuration
 JIRA_BASE_URL = opts[:hostname]
-
-uri = URI(JIRA_BASE_URL)
-host = uri.host
-path = uri.path
-uri.path = ''
-keychainitem = Keychain.internet_passwords.where(:server => host).first
-USERNAME = keychainitem.account
-JIRACLIENT = JIRA::Client.new(
-  :username => USERNAME,
-  :password => keychainitem.password,
-  :site     => uri.to_s,
-  :context_path => path,
-  :auth_type => :basic
-)
-
 QUERY = opts[:filter]
-JQL = URI::encode(QUERY)
+PARENT_TASK_FIELD = opts[:parenttaskfield]
 
 #OmniFocus Configuration
 DEFAULT_CONTEXT = opts[:context]
 DEFAULT_PROJECT = opts[:project]
-
-ParentTaskField = opts[:parenttaskfield]
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **new_task_properties)
@@ -145,48 +128,33 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
 end
 
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
-def add_jira_tickets_to_omnifocus ()
+def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue, username)
   # Get the open Jira issues assigned to you
   fields = ['summary', 'reporter', 'assignee', 'duedate']
-  if ParentTaskField
-    fields.push ParentTaskField
+  if PARENT_TASK_FIELD
+    fields.push PARENT_TASK_FIELD
   end
-  results = JIRACLIENT.Issue.jql(QUERY, fields: fields)
+  results = jira_issue.jql(QUERY, fields: fields)
   if results.nil?
     QUIET or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
 
-  # Get the OmniFocus app and main document via AppleScript
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
-
-  # Iterate through resulting issues.
   results.each do |ticket|
     jira_id = ticket.key
     add_task(omnifocus_document,
-             # Create the task name by adding the ticket summary to the jira ticket key
-             name: "#{jira_id}: #{ticket.summary}",
-             # Base context on the reporter
-             #context: ticket.reporter.attrs["displayName"]
-             context: ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),
-             # Create the task notes with the Jira Ticket URL
-             note: "#{JIRA_BASE_URL}/browse/#{jira_id}",
-             # Flag the task iff it's assigned to me.
-             flagged: ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == USERNAME),
-             # Get parent task, if any
-             parent_task: ticket.fields[ParentTaskField],
-             # Get due date, if any
-             due_date: (ticket.duedate && Date.parse(ticket.duedate))
+             name:        "#{jira_id}: #{ticket.summary}",
+             #context:     ticket.reporter.attrs["displayName"]
+             context:     ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),
+             note:        "#{JIRA_BASE_URL}/browse/#{jira_id}",
+             flagged:     ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == username),
+             parent_task: ticket.fields[PARENT_TASK_FIELD],
+             due_date:    (ticket.duedate && Date.parse(ticket.duedate))
             )
   end
-
 end
 
-def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
-  # get tasks from the project
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
+def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document, jira_issue)
   ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
   ctx.flattened_contexts.get.each do |ctx|
     tasks = ctx.tasks.get
@@ -195,7 +163,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
         # try to parse out jira id
         full_url= task.note.get
         jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
-        ticket = JIRACLIENT.Issue.find(jira_id)
+        ticket = jira_issue.find(jira_id)
         status = ticket.fields["status"]
         if ['Closed', 'Resolved'].include? status["name"]
           # if resolved, mark it as complete in OmniFocus
@@ -215,8 +183,27 @@ end
 
 def main ()
   if app_is_running("OmniFocus")
-    add_jira_tickets_to_omnifocus
-    mark_resolved_jira_tickets_as_complete_in_omnifocus
+    # Get Handle to OmniFocus
+    omnifocus_document = Appscript.app.by_name("OmniFocus").default_document
+
+    # Get handle to Jira
+    uri = URI(JIRA_BASE_URL)
+    host = uri.host
+    path = uri.path
+    uri.path = ''
+    keychainitem = Keychain.internet_passwords.where(:server => host).first
+    username = keychainitem.account
+    jiraclient = JIRA::Client.new(
+      :username => username,
+      :password => keychainitem.password,
+      :site     => uri.to_s,
+      :context_path => path,
+      :auth_type => :basic
+    )
+    jira_issue = jiraclient.Issue
+
+    add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue, username)
+    mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document, jira_issue)
   end
 end
 

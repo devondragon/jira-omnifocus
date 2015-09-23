@@ -93,11 +93,10 @@ DEFAULT_PROJECT = opts[:project]
 ParentTaskField = opts[:parenttaskfield]
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
-def add_task(omnifocus_document, new_task_properties)
+def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **new_task_properties)
   # If there is a passed in OF project name, get the actual project object
-  if new_task_properties[:project]
-    proj_name = new_task_properties[:project]
-    proj = omnifocus_document.flattened_tasks[proj_name]
+  if project
+    proj = omnifocus_document.flattened_tasks[project]
   end
 
   # Check to see if there's already an OF Task with that name in the referenced Project
@@ -117,35 +116,31 @@ def add_task(omnifocus_document, new_task_properties)
   else
     defaultctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
     # If there is a passed in OF context name, get the actual context object (creating if necessary)
-    if ctx_name = new_task_properties[:context]
-      unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == ctx_name }
-        ctx = defaultctx.make(:new => :context, :with_properties => {:name => ctx_name})
-        QUIET or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{ctx_name}", 'OmniFocus context created'
+    if context
+      unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
+        ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
+        QUIET or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
       end
     else
       ctx = defaultctx
     end
 
     # If there is a passed in parent task, get the actual parent task object (creating if necessary)
-    if parent_name = new_task_properties[:parent_task]
-      unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_name }
+    if parent_task
+      unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_task }
         parent = proj.make(:new => :task,
-                           :with_properties => {:name => parent_name,
+                           :with_properties => {:name => parent_task,
                                                 :sequential => false,
                                                 :completed_by_children => true})
-        QUIET or Growler.notify 'Task Created', parent_name, 'OmniFocus task created'
+        QUIET or Growler.notify 'Task Created', parent_task, 'OmniFocus task created'
       end
-      # Remove the parent task property, as it won't be used like that.
-      new_task_properties.delete(:parent_task)
     end
     
-    # Remove the project property from the new Task properties, as it won't be used like that.
-    new_task_properties.delete(:project)
     # Update the context property to be the actual context object not the context name
     new_task_properties[:context] = ctx
     
     # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => new_task_properties)
+    #  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => new_task_properties)
 
     # Make a new Task in the Project
     task = proj.make(:new => :task,

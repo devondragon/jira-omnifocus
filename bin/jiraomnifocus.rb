@@ -112,6 +112,13 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
       end
     end
     
+    # delete nil properties
+    new_task_properties.each do |key, value|
+      if value.nil?
+        new_task_properties.delete key
+      end
+    end
+
     # Update the context property to be the actual context object not the context name
     new_task_properties[:context] = ctx
     
@@ -122,7 +129,7 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
     task = proj.make(:new => :task,
                      :at => parent,
                      :with_properties => new_task_properties)
-    QUIET or Growler.notify 'Task Created', name, 'OmniFocus task created'
+    QUIET or Growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
     return task
   end
 end
@@ -149,7 +156,7 @@ def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue, username)
              note:        "#{JIRA_BASE_URL}/browse/#{jira_id}",
              flagged:     ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == username),
              parent_task: ticket.fields[PARENT_TASK_FIELD],
-             due_date:    (ticket.duedate && Date.parse(ticket.duedate))
+             due_date:    ticket.duedate && Date.parse(ticket.duedate)
             )
   end
 end

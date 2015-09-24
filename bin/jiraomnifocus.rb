@@ -55,8 +55,8 @@ EOS
   opt :quiet, 'Disable alerts', :short => 'q', :default => config[:jira][:quiet]
 end
 
-QUIET = opts[:quiet]
-unless QUIET 
+$quiet = opts[:quiet]
+unless $quiet 
   Growler = Growl.new "localhost", Pathname.new($0).basename
   Growler.add_notification 'Error'
   Growler.add_notification 'No Results'
@@ -67,17 +67,17 @@ unless QUIET
 end
 
 #JIRA Configuration
-JIRA_BASE_URL = opts[:hostname]
-QUERY = opts[:filter]
-PARENT_TASK_FIELD = opts[:parenttaskfield]
+$jira_base_url = opts[:hostname]
+$query = opts[:filter]
+$parent_task_field = opts[:parenttaskfield]
 
 #OmniFocus Configuration
-DEFAULT_CONTEXT = opts[:context]
-DEFAULT_PROJECT = opts[:project]
+$default_context = opts[:context]
+$default_project = opts[:project]
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **new_task_properties)
-  proj = omnifocus_document.flattened_tasks[project || DEFAULT_PROJECT]
+  proj = omnifocus_document.flattened_tasks[project || $default_project]
 
   # Check to see if there's already an OF Task with that name in the referenced Project
   if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
@@ -85,17 +85,17 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
     task.flagged.set(new_task_properties[:flagged])
     if task.completed.get == true
       task.completed.set(false)
-      QUIET or Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
+      $quiet or Growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
     end
     task.completed.set(false)
     return task
   else
-    defaultctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
+    defaultctx = omnifocus_document.flattened_contexts[$default_context]
     # If there is a passed in OF context name, get the actual context object (creating if necessary)
     if context
       unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
         ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
-        QUIET or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
+        $quiet or Growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
       end
     else
       ctx = defaultctx
@@ -108,7 +108,7 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
                            :with_properties => {:name => parent_task,
                                                 :sequential => false,
                                                 :completed_by_children => true})
-        QUIET or Growler.notify 'Task Created', parent_task, 'OmniFocus task created'
+        $quiet or Growler.notify 'Task Created', parent_task, 'OmniFocus task created'
       end
     end
     
@@ -129,7 +129,7 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
     task = proj.make(:new => :task,
                      :at => parent,
                      :with_properties => new_task_properties)
-    QUIET or Growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
+    $quiet or Growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
     return task
   end
 end
@@ -138,12 +138,12 @@ end
 def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
   # Get the open Jira issues assigned to you
   fields = ['summary', 'reporter', 'assignee', 'duedate']
-  if PARENT_TASK_FIELD
-    fields.push PARENT_TASK_FIELD
+  if $parent_task_field
+    fields.push $parent_task_field
   end
-  results = jira_issue.jql(QUERY, fields: fields)
+  results = jira_issue.jql($query, fields: fields)
   if results.nil?
-    QUIET or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
+    $quiet or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
 
@@ -155,30 +155,30 @@ def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
              name:        "#{jira_id}: #{ticket.summary}",
              #context:     ticket.reporter.attrs["displayName"]
              context:     ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),
-             note:        "#{JIRA_BASE_URL}/browse/#{jira_id}",
+             note:        "#{$jira_base_url}/browse/#{jira_id}",
              flagged:     ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == username),
-             parent_task: ticket.fields[PARENT_TASK_FIELD],
+             parent_task: ticket.fields[$parent_task_field],
              due_date:    ticket.duedate && Date.parse(ticket.duedate)
             )
   end
 end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document, jira_issue)
-  ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
+  ctx = omnifocus_document.flattened_contexts[$default_context]
   ctx.flattened_contexts.get.each do |ctx|
     tasks = ctx.tasks.get
     tasks.each do |task|
-      if !task.completed.get && task.note.get.match(JIRA_BASE_URL)
+      if !task.completed.get && task.note.get.match($jira_base_url)
         # try to parse out jira id
         full_url= task.note.get
-        jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
+        jira_id=full_url.sub($jira_base_url+"/browse/","")
         ticket = jira_issue.find(jira_id)
         status = ticket.fields["status"]
         if ['Closed', 'Resolved'].include? status["name"]
           # if resolved, mark it as complete in OmniFocus
           if task.completed.get == false
             task.completed.set(true)
-            QUIET or Growler.notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
+            $quiet or Growler.notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
           end
         end
       end
@@ -195,7 +195,7 @@ def get_omnifocus_document
 end
 
 def get_jira_issue
-  uri = URI(JIRA_BASE_URL)
+  uri = URI($jira_base_url)
   host = uri.host
   path = uri.path
   uri.path = ''

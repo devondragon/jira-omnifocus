@@ -193,21 +193,20 @@ def get_jira_issue
   return jiraclient.Issue
 end
 
+def init_growler
+  $growler = Growl.new "localhost", Pathname.new($0).basename
+  $growler.add_notification 'Error'
+  $growler.add_notification 'No Results'
+  $growler.add_notification 'Context Created'
+  $growler.add_notification 'Task Created'
+  $growler.add_notification 'Task Not Completed'
+  $growler.add_notification 'Task Completed'
+end
+
 def main ()
   if app_is_running("OmniFocus")
-
     $opts = get_opts
-
-    unless $opts[:quiet] 
-      $growler = Growl.new "localhost", Pathname.new($0).basename
-      $growler.add_notification 'Error'
-      $growler.add_notification 'No Results'
-      $growler.add_notification 'Context Created'
-      $growler.add_notification 'Task Created'
-      $growler.add_notification 'Task Not Completed'
-      $growler.add_notification 'Task Completed'
-    end
-    
+    $opts[:quiet] || init_growler
     omnifocus_document = get_omnifocus_document
     jira_issue = get_jira_issue
     add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue)

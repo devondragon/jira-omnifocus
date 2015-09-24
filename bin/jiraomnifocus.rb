@@ -48,12 +48,12 @@ KNOWN ISSUES:
 ---
 EOS
     version 'jofsync 1.1.0'
-    opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :default => config[:jira][:hostname]
-    opt :context, 'OF Default Context', :type => :string, :short => 'c', :default => config[:jira][:context]
-    opt :project, 'OF Default Project', :type => :string, :short => 'r', :default => config[:jira][:project]
-    opt :filter, 'JQL Filter', :type => :string, :short => 'j', :default => config[:jira][:filter]
-    opt :parenttaskfield, 'Field to use in identifying parent tasks', :default => config[:jira][:parenttaskfield]
-    opt :quiet, 'Disable alerts', :short => 'q', :default => config[:jira][:quiet]
+    opt :hostname,        'Jira Server Hostname',                     :type => :string,  :short => 'h', :default => config[:jira][:hostname]
+    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config[:jira][:context]
+    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config[:jira][:project]
+    opt :filter,          'JQL Filter',                               :type => :string,  :short => 'j', :default => config[:jira][:filter]
+    opt :parenttaskfield, 'Field to use in identifying parent tasks', :type => :string,  :short => 'p', :default => config[:jira][:parenttaskfield]
+    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => config[:jira][:quiet]
   end
 end
 
@@ -184,11 +184,11 @@ def get_jira_issue
   keychainitem = Keychain.internet_passwords.where(:server => host).first
   username = keychainitem.account
   jiraclient = JIRA::Client.new(
-    :username => username,
-    :password => keychainitem.password,
-    :site     => uri.to_s,
+    :username     => username,
+    :password     => keychainitem.password,
+    :site         => uri.to_s,
     :context_path => path,
-    :auth_type => :basic
+    :auth_type    => :basic
   )
   return jiraclient.Issue
 end

@@ -135,7 +135,7 @@ def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **ne
 end
 
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
-def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue, username)
+def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
   # Get the open Jira issues assigned to you
   fields = ['summary', 'reporter', 'assignee', 'duedate']
   if PARENT_TASK_FIELD
@@ -146,6 +146,8 @@ def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue, username)
     QUIET or Growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
+
+  username = jira_issue.client.options[:username]
 
   results.each do |ticket|
     jira_id = ticket.key
@@ -188,28 +190,32 @@ def app_is_running(app_name)
   `ps aux` =~ /#{app_name}/ ? true : false
 end
 
+def get_omnifocus_document
+  return Appscript.app.by_name("OmniFocus").default_document
+end
+
+def get_jira_issue
+  uri = URI(JIRA_BASE_URL)
+  host = uri.host
+  path = uri.path
+  uri.path = ''
+  keychainitem = Keychain.internet_passwords.where(:server => host).first
+  username = keychainitem.account
+  jiraclient = JIRA::Client.new(
+    :username => username,
+    :password => keychainitem.password,
+    :site     => uri.to_s,
+    :context_path => path,
+    :auth_type => :basic
+  )
+  return jiraclient.Issue
+end
+
 def main ()
   if app_is_running("OmniFocus")
-    # Get Handle to OmniFocus
-    omnifocus_document = Appscript.app.by_name("OmniFocus").default_document
-
-    # Get handle to Jira
-    uri = URI(JIRA_BASE_URL)
-    host = uri.host
-    path = uri.path
-    uri.path = ''
-    keychainitem = Keychain.internet_passwords.where(:server => host).first
-    username = keychainitem.account
-    jiraclient = JIRA::Client.new(
-      :username => username,
-      :password => keychainitem.password,
-      :site     => uri.to_s,
-      :context_path => path,
-      :auth_type => :basic
-    )
-    jira_issue = jiraclient.Issue
-
-    add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue, username)
+    omnifocus_document = get_omnifocus_document
+    jira_issue = get_jira_issue
+    add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue)
     mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document, jira_issue)
   end
 end

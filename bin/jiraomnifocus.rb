@@ -113,7 +113,6 @@ def add_task(omnifocus_document,
   end
 end
 
-# This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
   # Get the open Jira issues assigned to you
   fields = ['summary', 'reporter', 'assignee', 'duedate']

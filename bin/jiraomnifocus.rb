@@ -10,19 +10,9 @@ require 'jira'
 require 'ruby-growl'
 require 'pathname'
 
-class Hash
-  #take keys of hash and transform those to a symbols
-  def self.transform_keys_to_symbols(value)
-    return value if not value.is_a?(Hash)
-    hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = Hash.transform_keys_to_symbols(v); memo}
-    return hash
-  end
-end
-
 def get_opts
   if  File.file?(ENV['HOME']+'/.jofsync.yaml')
     config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
-    config = Hash.transform_keys_to_symbols(config)
 =begin
 YAML CONFIG EXAMPLE
 ---
@@ -48,12 +38,12 @@ KNOWN ISSUES:
 ---
 EOS
     version 'jofsync 1.1.0'
-    opt :hostname,        'Jira Server Hostname',                     :type => :string,  :short => 'h', :default => config[:jira][:hostname]
-    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config[:jira][:context]
-    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config[:jira][:project]
-    opt :filter,          'JQL Filter',                               :type => :string,  :short => 'j', :default => config[:jira][:filter]
-    opt :parenttaskfield, 'Field to use in identifying parent tasks', :type => :string,  :short => 'p', :default => config[:jira][:parenttaskfield]
-    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => config[:jira][:quiet]
+    opt :hostname,        'Jira Server Hostname',                     :type => :string,  :short => 'h', :default => config["jira"]["hostname"]
+    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config["jira"]["context"]
+    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config["jira"]["project"]
+    opt :filter,          'JQL Filter',                               :type => :string,  :short => 'j', :default => config["jira"]["filter"]
+    opt :parenttaskfield, 'Field to use in identifying parent tasks', :type => :string,  :short => 'p', :default => config["jira"]["parenttaskfield"]
+    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => config["jira"]["quiet"]
   end
 end
 

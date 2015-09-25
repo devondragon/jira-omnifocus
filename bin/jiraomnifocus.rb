@@ -18,9 +18,10 @@ YAML CONFIG EXAMPLE
 ---
 jira:
   hostname: 'http://example.atlassian.net'
+  filter:   'resolution = Unresolved and issue in watchedissues()'
+omnifocus:
   context:  'Colleagues'
   project:  'Jira'
-  filter:   'resolution = Unresolved and issue in watchedissues()'
 =end
   end
   
@@ -39,11 +40,11 @@ KNOWN ISSUES:
 EOS
     version 'jofsync 1.1.0'
     opt :hostname,        'Jira Server Hostname',                     :type => :string,  :short => 'h', :default => config["jira"]["hostname"]
-    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config["jira"]["context"]
-    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config["jira"]["project"]
     opt :filter,          'JQL Filter',                               :type => :string,  :short => 'j', :default => config["jira"]["filter"]
     opt :parenttaskfield, 'Field to use in identifying parent tasks', :type => :string,  :short => 'p', :default => config["jira"]["parenttaskfield"]
-    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => config["jira"]["quiet"]
+    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config["omnifocus"]["context"]
+    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config["omnifocus"]["project"]
+    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => false
   end
 end
 

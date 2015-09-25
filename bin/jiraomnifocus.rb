@@ -48,61 +48,68 @@ EOS
 end
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
-def add_task(omnifocus_document, project:nil, parent_task:nil, context:nil, **new_task_properties)
-  proj = omnifocus_document.flattened_tasks[project || $opts[:project]]
-
-  # Check to see if there's already an OF Task with that name in the referenced Project
-  if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
-    # Make sure the flag is set correctly.
-    task.flagged.set(new_task_properties[:flagged])
-    if task.completed.get == true
+def add_task(omnifocus_document,
+             project: $opts[:project],
+             parent_task: nil,
+             context: nil,
+             **new_task_properties)
+  if project
+    proj = omnifocus_document.flattened_tasks[project]
+    
+    # Check to see if there's already an OF Task with that name in the referenced Project
+    if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
+      # Make sure the flag is set correctly.
+      task.flagged.set(new_task_properties[:flagged])
+      if task.completed.get == true
+        task.completed.set(false)
+        $opts[:quiet] or $growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
+      end
       task.completed.set(false)
-      $opts[:quiet] or $growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
-    end
-    task.completed.set(false)
-    return task
-  else
-    defaultctx = omnifocus_document.flattened_contexts[$opts[:context]]
-    # If there is a passed in OF context name, get the actual context object (creating if necessary)
-    if context
-      unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
-        ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
-        $opts[:quiet] or $growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
-      end
+      return task
     else
-      ctx = defaultctx
-    end
-
-    # If there is a passed in parent task, get the actual parent task object (creating if necessary)
-    if parent_task
-      unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_task }
-        parent = proj.make(:new => :task,
-                           :with_properties => {:name => parent_task,
-                                                :sequential => false,
-                                                :completed_by_children => true})
-        $opts[:quiet] or $growler.notify 'Task Created', parent_task, 'OmniFocus task created'
+      defaultctx = omnifocus_document.flattened_contexts[$opts[:context]]
+      # If there is a passed in OF context name, get the actual context object (creating if necessary)
+      if context
+        unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
+          ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
+          $opts[:quiet] or $growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
+        end
+      else
+        ctx = defaultctx
       end
-    end
-    
-    # delete nil properties
-    new_task_properties.each do |key, value|
-      if value.nil?
-        new_task_properties.delete key
+      
+      # If there is a passed in parent task, get the actual parent task object (creating if necessary)
+      if parent_task
+        unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_task }
+          parent = proj.make(:new => :task,
+                             :with_properties => {:name => parent_task,
+                                                  :sequential => false,
+                                                  :completed_by_children => true})
+          $opts[:quiet] or $growler.notify 'Task Created', parent_task, 'OmniFocus task created'
+        end
       end
+      
+      # delete nil properties
+      new_task_properties.each do |key, value|
+        if value.nil?
+          new_task_properties.delete key
+        end
+      end
+      
+      # Update the context property to be the actual context object not the context name
+      new_task_properties[:context] = ctx
+      
+      # Make a new Task in the Project
+      task = proj.make(:new => :task,
+                       :at => parent,
+                       :with_properties => new_task_properties)
+      $opts[:quiet] or $growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
+      return task
     end
-
-    # Update the context property to be the actual context object not the context name
-    new_task_properties[:context] = ctx
-    
-    # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-    #  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => new_task_properties)
-
-    # Make a new Task in the Project
-    task = proj.make(:new => :task,
-                     :at => parent,
-                     :with_properties => new_task_properties)
-    $opts[:quiet] or $growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
-    return task
+  else
+    # If there is no project, create the tasks in the Inbox
+    new_task = omnifocus_document.make(:new => :inbox_task,
+                                       :with_properties => new_task_properties)
   end
 end
 

@@ -47,11 +47,10 @@ EOS
   end
 end
 
-# This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document,
-             project: $opts[:project],
+             project:     $opts[:project],
              parent_task: nil,
-             context: nil,
+             context:     nil,
              **new_task_properties)
   if project
     proj = omnifocus_document.flattened_tasks[project]

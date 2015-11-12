@@ -177,16 +177,19 @@ def get_jira_issue
   host = uri.host
   path = uri.path
   uri.path = ''
-  keychainitem = Keychain.internet_passwords.where(:server => host).first
-  username = keychainitem.account
-  jiraclient = JIRA::Client.new(
-    :username     => username,
-    :password     => keychainitem.password,
-    :site         => uri.to_s,
-    :context_path => path,
-    :auth_type    => :basic
-  )
-  return jiraclient.Issue
+  if keychainitem = Keychain.internet_passwords.where(:server => host).first
+    username = keychainitem.account
+    jiraclient = JIRA::Client.new(
+      :username     => username,
+      :password     => keychainitem.password,
+      :site         => uri.to_s,
+      :context_path => path,
+      :auth_type    => :basic
+    )
+    return jiraclient.Issue
+  else
+    raise "Password for #{host} not found in keychain; add it using 'security add-internet-password -a <username> -s #{host} -w <password>'"
+  end
 end
 
 def init_growler

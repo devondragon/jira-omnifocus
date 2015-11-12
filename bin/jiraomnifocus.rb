@@ -55,7 +55,9 @@ def add_task(omnifocus_document,
              **new_task_properties)
   if project
     proj = omnifocus_document.flattened_tasks[project]
-    
+    unless proj.exists
+      raise "No such project as #{project} in OmniFocus"
+    end
     # Check to see if there's already an OF Task with that name in the referenced Project
     if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
       # Make sure the flag is set correctly.
@@ -143,6 +145,9 @@ end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document, jira_issue)
   ctx = omnifocus_document.flattened_contexts[$opts[:context]]
+  unless ctx.exists
+    raise "No such context as #{$opts[:context]}"
+  end
   ctx.flattened_contexts.get.each do |ctx|
     tasks = ctx.tasks.get
     tasks.each do |task|

@@ -64,7 +64,7 @@ def add_task(omnifocus_document,
       task.flagged.set(new_task_properties[:flagged])
       if task.completed.get == true
         task.completed.set(false)
-        $opts[:quiet] or $growler.notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
+        notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
       end
       task.completed.set(false)
       return task
@@ -74,7 +74,7 @@ def add_task(omnifocus_document,
       if context
         unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
           ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
-          $opts[:quiet] or $growler.notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
+          notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
         end
       else
         ctx = defaultctx
@@ -87,7 +87,7 @@ def add_task(omnifocus_document,
                              :with_properties => {:name => parent_task,
                                                   :sequential => false,
                                                   :completed_by_children => true})
-          $opts[:quiet] or $growler.notify 'Task Created', parent_task, 'OmniFocus task created'
+          notify 'Task Created', parent_task, 'OmniFocus task created'
         end
       end
       
@@ -105,7 +105,7 @@ def add_task(omnifocus_document,
       task = proj.make(:new => :task,
                        :at => parent,
                        :with_properties => new_task_properties)
-      $opts[:quiet] or $growler.notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
+      notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
       return task
     end
   else
@@ -123,7 +123,7 @@ def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
   end
   results = jira_issue.jql($opts[:filter], fields: fields)
   if results.nil?
-    $opts[:quiet] or $growler.notify 'No Results', Pathname.new($0).basename, "No results from Jira"
+    notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
 
@@ -161,7 +161,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document, jir
           # if resolved, mark it as complete in OmniFocus
           if task.completed.get == false
             task.completed.set(true)
-            $opts[:quiet] or $growler.notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
+            notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
           end
         end
       end
@@ -197,20 +197,36 @@ def get_jira_issue
   end
 end
 
-def init_growler
-  $growler = Growl.new "localhost", Pathname.new($0).basename
-  $growler.add_notification 'Error'
-  $growler.add_notification 'No Results'
-  $growler.add_notification 'Context Created'
-  $growler.add_notification 'Task Created'
-  $growler.add_notification 'Task Not Completed'
-  $growler.add_notification 'Task Completed'
+def init_notify
+  unless $opts[:quiet]
+    if false
+      $growler = Growl.new "localhost", Pathname.new($0).basename
+      $growler.add_notification 'Error'
+      $growler.add_notification 'No Results'
+      $growler.add_notification 'Context Created'
+      $growler.add_notification 'Task Created'
+      $growler.add_notification 'Task Not Completed'
+      $growler.add_notification 'Task Completed'
+    else
+      $notifier = TerminalNotifier::Guard
+    end
+  end
+end
+
+def notify(notification, title, text)
+  unless $opts[:quiet]
+    if false
+      $growler.notify(notification, title, text)
+    else
+      $notifier.notify(text, :title => title)
+    end
+  end
 end
 
 def main ()
   if app_is_running("OmniFocus")
     $opts = get_opts
-    $opts[:quiet] || init_growler
+    init_notify
     omnifocus_document = get_omnifocus_document
     jira_issue = get_jira_issue
     add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue)

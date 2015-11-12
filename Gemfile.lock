@@ -32,6 +32,8 @@ GEM
       corefoundation (~> 0.2.0)
       ffi
     systemu (2.6.5)
+    terminal-notifier (1.6.3)
+    terminal-notifier-guard (1.6.4)
     thread_safe (0.3.4)
     trollop (2.0)
     tzinfo (1.2.2)
@@ -49,6 +51,8 @@ DEPENDENCIES
   rb-appscript
   ruby-growl
   ruby-keychain
+  terminal-notifier
+  terminal-notifier-guard (~> 1.6.1)
   trollop
 
 BUNDLED WITH

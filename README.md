@@ -7,9 +7,13 @@ http://www.digitalsanctuary.com/tech-blog/general/jira-to-omnifocus-integration.
 
 What it does:
 
-It pulls back all unresolved Jira tickets that are assigned to you and if it hasn't already created a OmniFocus task for that ticket, it creates a new one.  The title of the task is the Jira ticket number followed by the summary from the ticket.  The note part of the OmniFocus task will contain the URL to the Jira ticket so you can easily go right to it.  I chose not to pull over the full description, or comment history into the task notes as it's usually more than I want to see in OmniFocus.
+It pulls back all unresolved Jira tickets that you are watching and if it hasn't already created a OmniFocus task for that ticket, it creates a new one.  The title of the task is the Jira ticket number followed by the summary from the ticket.  The note part of the OmniFocus task will contain the URL to the Jira ticket so you can easily go right to it.  I chose not to pull over the full description, or comment history into the task notes as it's usually more than I want to see in OmniFocus. If the ticket is assigned to you, it will be flagged. The context will be set based on who generated the ticket.  If there is no existing context, one will be created.
 
-It also checks all the OmniFocus tasks that look like they are related to Jira tickets, and checks to see if the matching ticket has been resolved.  If so, it marks the task as complete. If a task has been re-assigned to someone else or unassigned it will remove it from Omnifocus.
+You can define a parenttaskfield and if you do so, tasks will be grouped under parent tasks as defined by the field.  For example, in our Jira, customfield_10040 contains the company name of the customer who this work is for.  By defining this, each ticket is put under a parent task for the company.  The parent task will be completed automatically when all the tickets under it are completed.
+
+It also checks all the OmniFocus tasks that look like they are related to Jira tickets, and checks to see if the matching ticket has been resolved.  If so, it marks the task as complete. If a task has been re-assigned to someone else or unassigned it will no longer be flagged.
+
+Notifications are sent via Growl about status changes.
 
 Very simple.  The Ruby code is straight forward and it should be easy to modify to do other things to meet your specific needs.
 
@@ -20,18 +24,20 @@ gem install bundler
 bundle install
 ```
 
-This also support [rbenv](http://rbenv.org/), if you happen to be using it.
+This also supports [rbenv](http://rbenv.org/), if you happen to be using it.
 
-You'll need to copy jofsync.yaml.sample from the git checkout to ~/.jofsync.yaml, and then edit is as appropriate.
+You'll need to copy jofsync.yaml.sample from the git checkout to ~/.jofsync.yaml, and then edit it as appropriate.
 
-Make sure that you have a project in context in Omnifocus that matches what you used in the configuration file.
+Make sure that you have a project and context in OmniFocus that match what you used in the configuration file.
 
-You can run the script manually or you can add a cron entry to run it periodically (it will take a minute or so to run so don't run it too often).
+Your username and password for the Jira server must be defined in your keychain. Unlike previous versions of this script, your password is not stored in plain text.
 
-You can use crontab -e to edit your user crontab and create an entry like this:
+This version of jofsync will not run under cron and instead needs to be run under launchd.  This is because it requires access to the keychain in lieu of hardcoded passwords.
+
+To install it in launchd, edit jofsync.plist to meet your needs and copy it to ~/Library/LaunchAgents/jofsync.plist and run
 
 ```
-*/10 * * * * cd ~/dev/git/jira-omnifocus/bin && ./jiraomnifocus.rb
+launchctl load ~/Library/LaunchAgents/jofsync.plist
 ```
 
 That should be it!  If it doesn't work, try adding some puts debug statements and running it manually.  

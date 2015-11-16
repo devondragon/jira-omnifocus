@@ -5,4 +5,7 @@ gem 'json'
 gem 'trollop'
 gem 'jira-ruby', :git => 'https://github.com/sumoheavy/jira-ruby.git'
 gem 'highline'
-
+gem 'ruby-keychain', :require => 'keychain'
+gem 'ruby-growl'
+gem 'terminal-notifier-guard', '~> 1.6.1'
+gem 'terminal-notifier'

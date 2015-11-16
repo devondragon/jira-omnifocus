@@ -5,12 +5,30 @@ Bundler.require(:default)
 
 require 'appscript'
 require 'yaml'
-require 'net/http'
+require 'keychain'
+require 'jira'
+require 'ruby-growl'
+require 'pathname'
 
-opts = Trollop::options do
-  banner ""
-  banner <<-EOS
-Jira Omnifocus Sync Tool
+def get_opts
+  if  File.file?(ENV['HOME']+'/.jofsync.yaml')
+    config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
+=begin
+YAML CONFIG EXAMPLE
+---
+jira:
+  hostname: 'http://example.atlassian.net'
+  filter:   'resolution = Unresolved and issue in watchedissues()'
+omnifocus:
+  context:  'Colleagues'
+  project:  'Jira'
+=end
+  end
+  
+  return Trollop::options do
+    banner ""
+    banner <<-EOS
+Jira OmniFocus Sync Tool
 
 Usage:
        jofsync [options]
@@ -20,219 +38,131 @@ KNOWN ISSUES:
 
 ---
 EOS
-  version 'jofsync 1.0.0'
-  opt :username, 'Jira Username', :type => :string, :short => 'u', :required => false
-  opt :password, 'Jira Password', :type => :string, :short => 'p', :required => false
-  opt :hostname, 'Jira Server Hostname', :type => :string, :short => 'h', :required => false
-  opt :context, 'OF Default Context', :type => :string, :short => 'c', :required => false
-  opt :project, 'OF Default Project', :type => :string, :short => 'r', :required => false
-  opt :flag, 'Flag tasks in OF', :type => :boolean, :short => 'f', :required => false
-  opt :filter, 'JQL Filter', :type => :string, :short => 'j', :required => false
-  opt :quiet, 'Disable terminal output', :short => 'q', :default => true
-end
-
-class Hash
-  #take keys of hash and transform those to a symbols
-  def self.transform_keys_to_symbols(value)
-    return value if not value.is_a?(Hash)
-    hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = Hash.transform_keys_to_symbols(v); memo}
-    return hash
+    version 'jofsync 1.1.0'
+    opt :hostname,        'Jira Server Hostname',                     :type => :string,  :short => 'h', :default => config["jira"]["hostname"]
+    opt :filter,          'JQL Filter',                               :type => :string,  :short => 'j', :default => config["jira"]["filter"]
+    opt :parenttaskfield, 'Field to use in identifying parent tasks', :type => :string,  :short => 'p', :default => config["jira"]["parenttaskfield"]
+    opt :context,         'OF Default Context',                       :type => :string,  :short => 'c', :default => config["omnifocus"]["context"]
+    opt :project,         'OF Default Project',                       :type => :string,  :short => 'r', :default => config["omnifocus"]["project"]
+    opt :quiet,           'Disable alerts',                           :type => :boolean, :short => 'q', :default => false
   end
 end
 
-if  File.file?(ENV['HOME']+'/.jofsync.yaml')
-  config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
-  config = Hash.transform_keys_to_symbols(config)
-=begin
-YAML CONFIG EXAMPLE
----
-jira:
-  hostname: 'http://example.atlassian.net'
-  username: 'jdoe'
-  password: 'blahblahblah'
-  context: 'Jira'
-  project: 'Work'
-  flag: true
-  filter: 'assignee = currentUser() AND status not in (Closed, Resolved) AND sprint in openSprints()'
-=end
-end
-
-syms = [:username, :hostname, :context, :project, :flag, :filter]
-syms.each { |x|
-  unless opts[x]
-    if config[:jira][x]
-      opts[x] = config[:jira][x]
-    else
-      puts 'Please provide a ' + x.to_s + ' value on the CLI or in the config file.'
-      exit 1
+def add_task(omnifocus_document,
+             project:     $opts[:project],
+             parent_task: nil,
+             context:     nil,
+             **new_task_properties)
+  if project
+    proj = omnifocus_document.flattened_tasks[project]
+    unless proj.exists
+      raise "No such project as #{project} in OmniFocus"
     end
- end
-}
-
-unless opts[:password]
-  if config[:jira][:password]
-    opts[:password] = config[:jira][:password]
-  else
-    opts[:password] = ask("password: ") {|q| q.echo = false}
-  end
-end
-
-#JIRA Configuration
-JIRA_BASE_URL = opts[:hostname]
-USERNAME = opts[:username]
-PASSWORD = opts[:password]
-
-QUERY = opts[:filter]
-JQL = URI::encode(QUERY)
-
-#OmniFocus Configuration
-DEFAULT_CONTEXT = opts[:context]
-DEFAULT_PROJECT = opts[:project]
-FLAGGED = opts[:flag]
-
-# This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
-def get_issues
-  jira_issues = Hash.new
-  # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI(JIRA_BASE_URL + '/rest/api/2/search?jql=' + JQL)
-
-  Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-    request = Net::HTTP::Get.new(uri)
-    request.basic_auth USERNAME, PASSWORD
-    response = http.request request
-    # If the response was good, then grab the data
-    if response.code =~ /20[0-9]{1}/
-        data = JSON.parse(response.body)
-        data["issues"].each do |item|
-          jira_id = item["key"]
-#          jira_issues[jira_id] = item["fields"]["summary"]
-          jira_issues[jira_id] = item
+    # Check to see if there's already an OF Task with that name in the referenced Project
+    if task = proj.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == new_task_properties[:name] }
+      # Make sure the flag is set correctly.
+      task.flagged.set(new_task_properties[:flagged])
+      if task.completed.get == true
+        task.completed.set(false)
+        notify 'Task Not Completed', task.name.get, "OmniFocus task no longer marked completed"
+      end
+      task.completed.set(false)
+      return task
+    else
+      defaultctx = omnifocus_document.flattened_contexts[$opts[:context]]
+      # If there is a passed in OF context name, get the actual context object (creating if necessary)
+      if context
+        unless ctx = defaultctx.contexts.get.find { |c| c.name.get.force_encoding("UTF-8") == context }
+          ctx = defaultctx.make(:new => :context, :with_properties => {:name => context})
+          notify 'Context Created', "#{defaultctx.name.get}: #{context}", 'OmniFocus context created'
         end
-    else
-     raise StandardError, "Unsuccessful HTTP response code: " + response.code
+      else
+        ctx = defaultctx
+      end
+      
+      # If there is a passed in parent task, get the actual parent task object (creating if necessary)
+      if parent_task
+        unless parent = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == parent_task }
+          parent = proj.make(:new => :task,
+                             :with_properties => {:name => parent_task,
+                                                  :sequential => false,
+                                                  :completed_by_children => true})
+          notify 'Task Created', parent_task, 'OmniFocus task created'
+        end
+      end
+      
+      # delete nil properties
+      new_task_properties.each do |key, value|
+        if value.nil?
+          new_task_properties.delete key
+        end
+      end
+      
+      # Update the context property to be the actual context object not the context name
+      new_task_properties[:context] = ctx
+      
+      # Make a new Task in the Project
+      task = proj.make(:new => :task,
+                       :at => parent,
+                       :with_properties => new_task_properties)
+      notify 'Task Created', new_task_properties[:name], 'OmniFocus task created'
+      return task
     end
+  else
+    # If there is no project, create the tasks in the Inbox
+    new_task = omnifocus_document.make(:new => :inbox_task,
+                                       :with_properties => new_task_properties)
   end
-  return jira_issues
 end
 
-# This method adds a new Task to OmniFocus based on the new_task_properties passed in
-def add_task(omnifocus_document, new_task_properties)
-  # If there is a passed in OF project name, get the actual project object
-  if new_task_properties['project']
-    proj_name = new_task_properties["project"]
-    proj = omnifocus_document.flattened_tasks[proj_name]
-  end
-
-  # Check to see if there's already an OF Task with that name in the referenced Project
-  # If there is, just stop.
-  name   = new_task_properties["name"]
-  exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-  return false if exists
-
-  # If there is a passed in OF context name, get the actual context object
-  if new_task_properties['context']
-    ctx_name = new_task_properties["context"]
-    ctx = omnifocus_document.flattened_contexts[ctx_name]
-  end
-
-  # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
-  tprops = new_task_properties.inject({}) do |h, (k, v)|
-    h[:"#{k}"] = v
-    h
-  end
-
-  # Remove the project property from the new Task properties, as it won't be used like that.
-  tprops.delete(:project)
-  # Update the context property to be the actual context object not the context name
-  tprops[:context] = ctx if new_task_properties['context']
-
-  # You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
-
-  # Make a new Task in the Project
-  proj.make(:new => :task, :with_properties => tprops)
-
-  puts "task created"
-  return true
-end
-
-# This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
-def add_jira_tickets_to_omnifocus ()
+def add_jira_tickets_to_omnifocus (omnifocus_document, jira_issue)
   # Get the open Jira issues assigned to you
-  results = get_issues
+  fields = ['summary', 'reporter', 'assignee', 'duedate']
+  if $opts[:parenttaskfield]
+    fields.push $opts[:parenttaskfield]
+  end
+  results = jira_issue.jql($opts[:filter], fields: fields)
   if results.nil?
-    puts "No results from Jira"
+    notify 'No Results', Pathname.new($0).basename, "No results from Jira"
     exit
   end
 
-  # Get the OmniFocus app and main document via AppleScript
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
+  username = jira_issue.client.options[:username]
 
-  # Iterate through resulting issues.
-  results.each do |jira_id, ticket|
-    # Create the task name by adding the ticket summary to the jira ticket key
-    task_name = "#{jira_id}: #{ticket["fields"]["summary"]}"
-    # Create the task notes with the Jira Ticket URL
-    task_notes = "#{JIRA_BASE_URL}/browse/#{jira_id}"
-    
-    # Build properties for the Task
-    @props = {}
-    @props['name'] = task_name
-    @props['project'] = DEFAULT_PROJECT
-    @props['context'] = DEFAULT_CONTEXT
-    @props['note'] = task_notes
-    @props['flagged'] = FLAGGED
-    unless ticket["fields"]["duedate"].nil?
-      @props["due_date"] = Date.parse(ticket["fields"]["duedate"])
-    end
-    add_task(omnifocus_document, @props)
+  results.each do |ticket|
+    jira_id = ticket.key
+    add_task(omnifocus_document,
+             name:        "#{jira_id}: #{ticket.summary}",
+             #context:     ticket.reporter.attrs["displayName"]
+             context:     ticket.reporter.attrs["displayName"].split(", ").reverse.join(" "),
+             note:        "#{$opts[:hostname]}/browse/#{jira_id}",
+             flagged:     ((not ticket.assignee.nil?) and ticket.assignee.attrs["name"] == username),
+             parent_task: ticket.fields[$opts[:parenttaskfield]],
+             due_date:    ticket.duedate && Date.parse(ticket.duedate)
+            )
   end
 end
 
-def mark_resolved_jira_tickets_as_complete_in_omnifocus ()
-  # get tasks from the project
-  omnifocus_app = Appscript.app.by_name("OmniFocus")
-  omnifocus_document = omnifocus_app.default_document
-  ctx = omnifocus_document.flattened_contexts[DEFAULT_CONTEXT]
-  ctx.tasks.get.find.each do |task|
-    if !task.completed.get && task.note.get.match(JIRA_BASE_URL)
-      # try to parse out jira id
-      full_url= task.note.get
-      jira_id=full_url.sub(JIRA_BASE_URL+"/browse/","")
-      # check status of the jira
-      uri = URI(JIRA_BASE_URL + '/rest/api/2/issue/' + jira_id)
-
-      Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-        request = Net::HTTP::Get.new(uri)
-        request.basic_auth USERNAME, PASSWORD
-        response = http.request request
-
-  if response.code =~ /20[0-9]{1}/
-            data = JSON.parse(response.body)
-            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-            resolution = data["fields"]["resolution"]
-            if resolution != nil
-              # if resolved, mark it as complete in OmniFocus
-              if task.completed.get != true
-                task.completed.set(true)
-                puts "task marked completed"
-              end
-            end
-            # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
-            # It will be re-created if it is assigned back to you.
-            if ! data["fields"]["assignee"]
-              omnifocus_document.delete task
-              puts "task removed"
-            else
-              assignee = data["fields"]["assignee"]["name"]
-              if assignee != USERNAME
-                omnifocus_document.delete task
-                puts "task removed"
-              end
-            end
-        else
-         raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document, jira_issue)
+  ctx = omnifocus_document.flattened_contexts[$opts[:context]]
+  unless ctx.exists
+    raise "No such context as #{$opts[:context]}"
+  end
+  ctx.flattened_contexts.get.each do |ctx|
+    tasks = ctx.tasks.get
+    tasks.each do |task|
+      if !task.completed.get && task.note.get.match($opts[:hostname])
+        # try to parse out jira id
+        full_url= task.note.get
+        jira_id=full_url.sub($opts[:hostname]+"/browse/","")
+        ticket = jira_issue.find(jira_id)
+        status = ticket.fields["status"]
+        if ['Closed', 'Resolved'].include? status["name"]
+          # if resolved, mark it as complete in OmniFocus
+          if task.completed.get == false
+            task.completed.set(true)
+            notify 'Task Completed', task.name.get, "OmniFocus task marked completed"
+          end
         end
       end
     end
@@ -243,11 +173,65 @@ def app_is_running(app_name)
   `ps aux` =~ /#{app_name}/ ? true : false
 end
 
+def get_omnifocus_document
+  return Appscript.app.by_name("OmniFocus").default_document
+end
+
+def get_jira_issue
+  uri = URI($opts[:hostname])
+  host = uri.host
+  path = uri.path
+  uri.path = ''
+  if keychainitem = Keychain.internet_passwords.where(:server => host).first
+    username = keychainitem.account
+    jiraclient = JIRA::Client.new(
+      :username     => username,
+      :password     => keychainitem.password,
+      :site         => uri.to_s,
+      :context_path => path,
+      :auth_type    => :basic
+    )
+    return jiraclient.Issue
+  else
+    raise "Password for #{host} not found in keychain; add it using 'security add-internet-password -a <username> -s #{host} -w <password>'"
+  end
+end
+
+def init_notify
+  unless $opts[:quiet]
+    if false
+      $growler = Growl.new "localhost", Pathname.new($0).basename
+      $growler.add_notification 'Error'
+      $growler.add_notification 'No Results'
+      $growler.add_notification 'Context Created'
+      $growler.add_notification 'Task Created'
+      $growler.add_notification 'Task Not Completed'
+      $growler.add_notification 'Task Completed'
+    else
+      $notifier = TerminalNotifier::Guard
+    end
+  end
+end
+
+def notify(notification, title, text)
+  unless $opts[:quiet]
+    if false
+      $growler.notify(notification, title, text)
+    else
+      $notifier.notify(text, :title => title)
+    end
+  end
+end
+
 def main ()
-   if app_is_running("OmniFocus")
-	  add_jira_tickets_to_omnifocus
-	  mark_resolved_jira_tickets_as_complete_in_omnifocus
-   end
+  if app_is_running("OmniFocus")
+    $opts = get_opts
+    init_notify
+    omnifocus_document = get_omnifocus_document
+    jira_issue = get_jira_issue
+    add_jira_tickets_to_omnifocus(omnifocus_document, jira_issue)
+    mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document, jira_issue)
+  end
 end
 
 main

@@ -1,9 +1,11 @@
 ---
 jira:
   hostname: 'http://example.atlassian.net'
+  keychain: false
   username: 'me'
   password: 'secret'
+  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
+omnifocus:
   context:  'Office'
   project:  'Jira'
   flag:     true
-  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'

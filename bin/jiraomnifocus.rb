@@ -61,13 +61,15 @@ def get_issues
   uri = URI($opts[:hostname] + '/rest/api/2/search?jql=' + URI::encode($opts[:filter]))
 
   if $opts[:usekeychain]
-    uri = URI($opts[:hostname])
-    host = uri.host
-    puts host
-    keychainitem = Keychain.internet_passwords.where(:server => 'www.sparkred.com').first
-    puts keychainitem
-    $opts[:username] = keychainitem.account
-    $opts[:password] = keychainitem.password
+    keychainUri = URI($opts[:hostname])
+    host = keychainUri.host
+    if keychainitem = Keychain.internet_passwords.where(:server => host).first
+	    keychainitem = Keychain.internet_passwords.where(:server => 'www.sparkred.com').first
+    	$opts[:username] = keychainitem.account
+    	$opts[:password] = keychainitem.password
+    else
+    	raise "Password for #{host} not found in keychain; add it using 'security add-internet-password -a <username> -s #{host} -w <password>'"
+    end
   end
 
   Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|

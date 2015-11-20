@@ -46,4 +46,9 @@ I can't offer any support, as I don't know Ruby that well and just magically cob
 
 UPDATE:
 
-I have manually merged in some features from https://github.com/cgarrigues/jira-omnifocus as per discussion on https://github.com/devondragon/jira-omnifocus/pull/15   However I have been unable to get the keychain support work propertly, so by default it is off.  
+I have manually merged in some features from https://github.com/cgarrigues/jira-omnifocus as per discussion on https://github.com/devondragon/jira-omnifocus/pull/15   
+
+To use the keychain option, you have to create the keychain entry:
+
+security add-internet-password -a <username> -s #{host} -w <password>
+	

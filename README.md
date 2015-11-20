@@ -50,5 +50,5 @@ I have manually merged in some features from https://github.com/cgarrigues/jira-
 
 To use the keychain option, you have to create the keychain entry:
 
-security add-internet-password -a <username> -s #{host} -w <password>
+security add-internet-password -a <username> -s <hostname> -w <password>
 	

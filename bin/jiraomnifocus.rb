@@ -12,11 +12,11 @@ require 'pathname'
 def get_opts
   if  File.file?(ENV['HOME']+'/.jofsync.yaml')
     config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
-=begin
-YAML CONFIG EXAMPLE
+  else config = YAML.load <<-EOS
+#YAML CONFIG EXAMPLE
 ---
 jira:
-  hostname: 'http://example.atlassian.net'
+  hostname: 'http://please-configure-me-in-jofsync.yaml.atlassian.net'
   keychain: false
   username: ''
   password: ''
@@ -25,7 +25,7 @@ omnifocus:
   context:  'Office'
   project:  'Jira'
   flag: true
-=end
+EOS
   end
 
   return Trollop::options do

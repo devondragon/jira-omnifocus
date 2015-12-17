@@ -214,9 +214,16 @@ def get_omnifocus_document
   return Appscript.app.by_name("OmniFocus").default_document
 end
 
+def check_options()
+  if $opts[:hostname] == 'http://please-configure-me-in-jofsync.yaml.atlassian.net'
+    raise StandardError, "The hostname is not set. Did you create ~/.jofsync.yaml?"
+  end
+end
+
 def main ()
    if app_is_running("OmniFocus")
      $opts = get_opts
+     check_options()
      omnifocus_document = get_omnifocus_document
 	   add_jira_tickets_to_omnifocus(omnifocus_document)
 	   mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document)

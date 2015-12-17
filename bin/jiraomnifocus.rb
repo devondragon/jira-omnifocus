@@ -128,7 +128,7 @@ def add_task(omnifocus_document, new_task_properties)
   # Make a new Task in the Project
   proj.make(:new => :task, :with_properties => tprops)
 
-  puts "task created"
+  puts "Created task " + tprops[:name]
   return true
 end
 
@@ -186,7 +186,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
               # if resolved, mark it as complete in OmniFocus
               if task.completed.get != true
                 task.completed.set(true)
-                puts "task marked completed"
+                puts "Marked task completed " + jira_id
               end
             end
             # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.

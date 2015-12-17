@@ -78,13 +78,14 @@ def get_issues
     response = http.request request
     # If the response was good, then grab the data
     if response.code =~ /20[0-9]{1}/
+        puts "Connected successfully to " + uri.hostname
         data = JSON.parse(response.body)
         data["issues"].each do |item|
           jira_id = item["key"]
           jira_issues[jira_id] = item
         end
     else
-     raise StandardError, "Unsuccessful HTTP response code: " + response.code
+     raise StandardError, "Unsuccessful HTTP response code " + response.code + " from " + uri.hostname
     end
   end
   return jira_issues

@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-gem 'rb-appscript'
+gem 'rb-scpt'
 gem 'json'
 gem 'trollop'
 gem 'highline'

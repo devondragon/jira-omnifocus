@@ -3,7 +3,7 @@
 require 'bundler/setup'
 Bundler.require(:default)
 
-require 'appscript'
+require 'rb-scpt'
 require 'yaml'
 require 'net/http'
 require 'keychain'
@@ -78,13 +78,14 @@ def get_issues
     response = http.request request
     # If the response was good, then grab the data
     if response.code =~ /20[0-9]{1}/
+        puts "Connected successfully to " + uri.hostname
         data = JSON.parse(response.body)
         data["issues"].each do |item|
           jira_id = item["key"]
           jira_issues[jira_id] = item
         end
     else
-     raise StandardError, "Unsuccessful HTTP response code: " + response.code
+     raise StandardError, "Unsuccessful HTTP response code " + response.code + " from " + uri.hostname
     end
   end
   return jira_issues
@@ -127,7 +128,7 @@ def add_task(omnifocus_document, new_task_properties)
   # Make a new Task in the Project
   proj.make(:new => :task, :with_properties => tprops)
 
-  puts "task created"
+  puts "Created task " + tprops[:name]
   return true
 end
 
@@ -185,7 +186,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
               # if resolved, mark it as complete in OmniFocus
               if task.completed.get != true
                 task.completed.set(true)
-                puts "task marked completed"
+                puts "Marked task completed " + jira_id
               end
             end
             # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
@@ -214,9 +215,16 @@ def get_omnifocus_document
   return Appscript.app.by_name("OmniFocus").default_document
 end
 
+def check_options()
+  if $opts[:hostname] == 'http://please-configure-me-in-jofsync.yaml.atlassian.net'
+    raise StandardError, "The hostname is not set. Did you create ~/.jofsync.yaml?"
+  end
+end
+
 def main ()
    if app_is_running("OmniFocus")
      $opts = get_opts
+     check_options()
      omnifocus_document = get_omnifocus_document
 	   add_jira_tickets_to_omnifocus(omnifocus_document)
 	   mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document)

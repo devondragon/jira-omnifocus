@@ -6,7 +6,7 @@ GEM
     ffi (1.9.10)
     highline (1.7.7)
     json (1.8.3)
-    rb-appscript (0.6.1)
+    rb-scpt (1.0.1)
     ruby-keychain (0.3.2)
       corefoundation (~> 0.2.0)
       ffi
@@ -18,9 +18,9 @@ PLATFORMS
 DEPENDENCIES
   highline
   json
-  rb-appscript
+  rb-scpt
   ruby-keychain
   trollop
 
 BUNDLED WITH
-   1.10.6
+   1.11.2

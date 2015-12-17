@@ -3,7 +3,7 @@
 require 'bundler/setup'
 Bundler.require(:default)
 
-require 'appscript'
+require 'rb-scpt'
 require 'yaml'
 require 'net/http'
 require 'keychain'

@@ -101,9 +101,11 @@ def add_task(omnifocus_document, new_task_properties)
 
   # Check to see if there's already an OF Task with that name in the referenced Project
   # If there is, just stop.
-  name   = new_task_properties["name"]
-  exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-  return false if exists
+   name   = new_task_properties["name"]
+   #exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+   # You can un-comment the line below and comment the line above if you want to search your entire OF document, instead of a specific project.
+   exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+   return false if exists
 
   # If there is a passed in OF context name, get the actual context object
   if new_task_properties['context']

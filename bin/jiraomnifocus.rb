@@ -64,7 +64,6 @@ def get_issues
     keychainUri = URI($opts[:hostname])
     host = keychainUri.host
     if keychainitem = Keychain.internet_passwords.where(:server => host).first
-	    keychainitem = Keychain.internet_passwords.where(:server => 'www.sparkred.com').first
     	$opts[:username] = keychainitem.account
     	$opts[:password] = keychainitem.password
     else

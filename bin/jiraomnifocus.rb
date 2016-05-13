@@ -195,8 +195,8 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
             if ! data["fields"]["assignee"]
               omnifocus_document.delete task
             else
-              assignee = data["fields"]["assignee"]["name"]
-              if assignee != $opts[:username]
+              assignee = data["fields"]["assignee"]["name"].downcase
+              if assignee != $opts[:username].downcase
                 omnifocus_document.delete task
               end
             end

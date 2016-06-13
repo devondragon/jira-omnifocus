@@ -147,7 +147,7 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
 		# Create the task name by adding the ticket summary to the jira ticket key
 		task_name = "#{jira_id}: #{ticket["fields"]["summary"]}"
 		# Create the task notes with the Jira Ticket URL
-		task_notes = "#{$opts[:hostname]}/browse/#{jira_id}"
+		task_notes = "#{$opts[:hostname]}/browse/#{jira_id}\n\n#{ticket["fields"]["description"]}"
 
 		# Build properties for the Task
 		@props = {}
@@ -169,7 +169,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
 	ctx.tasks.get.find.each do |task|
 		if !task.completed.get && task.note.get.match($opts[:hostname])
 			# try to parse out jira id
-			full_url= task.note.get
+			full_url= task.note.get.lines.first.chomp
 			jira_id=full_url.sub($opts[:hostname]+"/browse/","")
 			# check status of the jira
 			uri = URI($opts[:hostname] + '/rest/api/2/issue/' + jira_id)

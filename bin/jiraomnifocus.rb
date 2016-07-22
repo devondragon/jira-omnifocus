@@ -84,6 +84,9 @@ def get_issues
 				jira_issues[jira_id] = item
 			end
 		else
+			# Use terminal-notifier to notify the user of the bad response--useful when running this script from a LaunchAgent
+			notify_message = "Response code: " + response.code
+			TerminalNotifier.notify(notify_message, :title => "JIRA OmniFocus Sync", :subtitle => uri.hostname, :sound => 'default')
 			raise StandardError, "Unsuccessful HTTP response code " + response.code + " from " + uri.hostname
 		end
 	end
@@ -125,7 +128,7 @@ def add_task(omnifocus_document, new_task_properties)
 
 	# You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
 	#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
-
+	
 	# Make a new Task in the Project
 	proj.make(:new => :task, :with_properties => tprops)
 

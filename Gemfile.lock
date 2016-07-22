@@ -10,6 +10,7 @@ GEM
     ruby-keychain (0.3.2)
       corefoundation (~> 0.2.0)
       ffi
+    terminal-notifier (1.6.3)
     trollop (2.1.2)
 
 PLATFORMS
@@ -20,7 +21,8 @@ DEPENDENCIES
   json
   rb-scpt
   ruby-keychain
+  terminal-notifier
   trollop
 
 BUNDLED WITH
-   1.11.2
+   1.12.0.rc

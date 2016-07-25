@@ -22,9 +22,12 @@ jira:
   password: ''
   filter:   'resolution = Unresolved and issue in watchedissues()'
 omnifocus:
-  context:  'Office'
-  project:  'Jira'
-  flag: true
+  context:  'Office'   # The default OF Context where new tasks are created.
+  project:  'Jira'     # The default OF Project where new tasks are created.
+  flag:     true       # Set this to 'true' if you want the new tasks to be flagged.
+  inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.
+  newproj:  false      # Set 'true' to add each JIRA ticket to OF as a Project instead of a Task.
+  folder:   'Jira'     # Sets the OF folder where new Projects are created (only applies if 'newproj' is 'true').
 EOS
   end
 
@@ -50,8 +53,10 @@ EOS
 		opt :context,   'OF Default Context',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["context"]
 		opt :project,   'OF Default Project',   :type => :string,   :short => 'r', :required => false,   :default => config["omnifocus"]["project"]
 		opt :flag,      'Flag tasks in OF',     :type => :boolean,  :short => 'f', :required => false,   :default => config["omnifocus"]["flag"]
-		opt :quiet,     'Disable output',       :type => :boolean,   :short => 'q',                      :default => true
-	end
+		opt :folder,	'OF Default Folder',	:type => :string,	:short => 'o', :required => false,	 :default => config["omnifocus"]["folder"] 
+		opt :inbox,     'Create inbox tasks',	:type => :boolean,	:short => 'i', :required => false,	 :default => config["omnifocus"]["inbox"]
+		opt :newproj,	'Create as projects',	:type => :boolean,	:short => 'n', :required => false,	 :default => config["omnifocus"]["newproj"]
+		opt :quiet,     'Disable output',       :type => :boolean,  :short => 'q',                       :default => true
 end
 
 # This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
@@ -101,12 +106,21 @@ def add_task(omnifocus_document, new_task_properties)
 		proj = omnifocus_document.flattened_tasks[proj_name]
 	end
 
-	# Check to see if there's already an OF Task with that name in the referenced Project
+	# Check to see if there's already an OF Task with that name
 	# If there is, just stop.
 	name   = new_task_properties["name"]
-	#exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-	# You can un-comment the line below and comment the line above if you want to search your entire OF document, instead of a specific project.
-	exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+	
+	if $opts[:inbox]
+		# Search your entire OF document, instead of a specific project.
+		exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+	elsif $opts[:newproj]
+		# Search your entire OF document, instead of a specific project.
+		exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+	else
+		# If you are keeping all your JIRA tasks in a single Project, we only need to search that Project
+		exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+	end
+
 	return false if exists
 
 	# If there is a passed in OF context name, get the actual context object
@@ -126,13 +140,22 @@ def add_task(omnifocus_document, new_task_properties)
 	# Update the context property to be the actual context object not the context name
 	tprops[:context] = ctx if new_task_properties['context']
 
-	# You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-	#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
+	# Create the task in the appropriate place as set in the config file
+	if $opts[:inbox]
+		# Create the tasks in your Inbox instead of a specific Project
+		new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
+		puts "Created inbox task: " + tprops[:name]
+	elsif $opts[:newproj]
+		# Create the task as a new project in a folder
+		of_folder = omnifocus_document.folders[$opts[:folder]]
+		new_task = of_folder.make(:new => :project, :with_properties => tprops)
+		puts "Created project in " + $opts[:folder] + " folder: " + tprops[:name]
+	else
+		# Make a new Task in the Project
+		proj.make(:new => :task, :with_properties => tprops)
+		puts "Created task [" + tprops[:name] + "] in project " + proj_name
+	end 
 	
-	# Make a new Task in the Project
-	proj.make(:new => :task, :with_properties => tprops)
-
-	puts "Created task " + tprops[:name]
 	return true
 end
 

@@ -10,9 +10,9 @@ require 'keychain'
 require 'pathname'
 
 def get_opts
-	if  File.file?(ENV['HOME']+'/.jofsync.yaml')
+  if  File.file?(ENV['HOME']+'/.jofsync.yaml')
 		config = YAML.load_file(ENV['HOME']+'/.jofsync.yaml')
-	else config = YAML.load <<-EOS
+  else config = YAML.load <<-EOS
 	#YAML CONFIG EXAMPLE
 ---
 jira:
@@ -62,31 +62,58 @@ end
 
 # This method gets all issues that are assigned to your USERNAME and whos status isn't Closed or Resolved.  It returns a Hash where the key is the Jira Ticket Key and the value is the Jira Ticket Summary.
 def get_issues
+  if $DEBUG
+    puts "JOFSYNC.get_issues: starting method..."
+  end
 	jira_issues = Hash.new
 	# This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
 	uri = URI($opts[:hostname] + '/rest/api/2/search?jql=' + URI::encode($opts[:filter]))
-
+  if $DEBUG
+    puts "JOFSYNC.get_issues: about to hit URL: " + uri.to_s() 
+  end
 	if $opts[:usekeychain]
+    if $DEBUG
+      puts "JOFSYNC.get_issues: using Keychain for auth"
+    end
 		keychainUri = URI($opts[:hostname])
 		host = keychainUri.host
+    if $DEBUG
+      puts "JOFSYNC.get_issues: looking for first Keychain entry for host: " + host
+    end
 		if keychainitem = Keychain.internet_passwords.where(:server => host).first
 			$opts[:username] = keychainitem.account
 			$opts[:password] = keychainitem.password
+      if $DEBUG
+        puts "JOFSYNC.get_issues: username and password loaded from Keychain"
+      end
 		else
 			raise "Password for #{host} not found in keychain; add it using 'security add-internet-password -a <username> -s #{host} -w <password>'"
 		end
 	end
 
+  if $DEBUG
+    puts "JOFSYNC.get_issues: abount to connect...."
+  end
 	Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
 		request = Net::HTTP::Get.new(uri)
 		request.basic_auth $opts[:username], $opts[:password]
 		response = http.request request
 		# If the response was good, then grab the data
+    if $DEBUG
+      puts "JOFSYNC.get_issues: response code: " + response.code
+      puts "JOFSYNC.get_issues: response body: " + response.body
+    end
 		if response.code =~ /20[0-9]{1}/
 			puts "Connected successfully to " + uri.hostname
 			data = JSON.parse(response.body)
+      if $DEBUG
+        puts "JOFSYNC.get_issues: response parsed successfully!"
+      end
 			data["issues"].each do |item|
 				jira_id = item["key"]
+        if $DEBUG
+          puts "JOFSYNC.get_issues: adding JIRA item: " + jira_id + " to the jira_issues array"
+        end
 				jira_issues[jira_id] = item
 			end
 		else
@@ -96,30 +123,64 @@ def get_issues
 			raise StandardError, "Unsuccessful HTTP response code " + response.code + " from " + uri.hostname
 		end
 	end
+  if $DEBUG
+    puts "JOFSYNC.get_issues: method_complete, returning jira_issues."
+  end
 	return jira_issues
 end
 
 # This method adds a new Task to OmniFocus based on the new_task_properties passed in
 def add_task(omnifocus_document, new_task_properties)
 	# If there is a passed in OF project name, get the actual project object
+  if $DEBUG
+    puts "JOFSYNC.add_task: starting method..."
+  end
+  
 	if new_task_properties['project']
 		proj_name = new_task_properties["project"]
+    if $DEBUG
+      puts "JOFSYNC.add_task: new task specified a project name of: " + proj_name + " so going to load that up"
+    end
 		proj = omnifocus_document.flattened_tasks[proj_name]
+    if $DEBUG
+      puts "JOFSYNC.add_task: project loaded successfully"
+    end
 	end
 
 	# Check to see if there's already an OF Task with that name
 	# If there is, just stop.
 	name   = new_task_properties["name"]
+  if $DEBUG
+    puts "JOFSYNC.add_task: going to check for existing tasks with the same name: " + name
+  end
 	
 	if $opts[:inbox]
 		# Search your entire OF document, instead of a specific project.
+    if $DEBUG
+      puts "JOFSYNC.add_task: inbox flag set, so need to search the entire OmniFocus document"
+    end
 		exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+    if $DEBUG
+      puts "JOFSYNC.add_task: task exists = " + exists.to_s()
+    end
 	elsif $opts[:newproj]
 		# Search your entire OF document, instead of a specific project.
+    if $DEBUG
+      puts "JOFSYNC.add_task: new project flag set, so need to search the entire OmniFocus document"
+    end
 		exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+    if $DEBUG
+      puts "JOFSYNC.add_task: task exists = " + exists.to_s()
+    end
 	else
 		# If you are keeping all your JIRA tasks in a single Project, we only need to search that Project
+    if $DEBUG
+      puts "JOFSYNC.add_task: searching only project: " + proj.name.get
+    end
 		exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
+    if $DEBUG
+      puts "JOFSYNC.add_task: task exists = " + exists.to_s()
+    end
 	end
 
 	return false if exists
@@ -127,7 +188,13 @@ def add_task(omnifocus_document, new_task_properties)
 	# If there is a passed in OF context name, get the actual context object
 	if new_task_properties['context']
 		ctx_name = new_task_properties["context"]
+    if $DEBUG
+      puts "JOFSYNC.add_task: new task specified a context of: " + ctx_name + " so going to load that up"
+    end
 		ctx = omnifocus_document.flattened_contexts[ctx_name]
+    if $DEBUG
+      puts "JOFSYNC.add_task: context loaded successfully"
+    end
 	end
 
 	# Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
@@ -141,38 +208,65 @@ def add_task(omnifocus_document, new_task_properties)
 	# Update the context property to be the actual context object not the context name
 	tprops[:context] = ctx if new_task_properties['context']
 
+  if $DEBUG
+    puts "JOFSYNC.add_task: task props - deleted project and set context"
+  end
+  
 	# Create the task in the appropriate place as set in the config file
 	if $opts[:inbox]
 		# Create the tasks in your Inbox instead of a specific Project
+    if $DEBUG
+      puts "JOFSYNC.add_task: adding Task to Inbox"
+    end
 		new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
 		puts "Created inbox task: " + tprops[:name]
 	elsif $opts[:newproj]
 		# Create the task as a new project in a folder
+    if $DEBUG
+      puts "JOFSYNC.add_task: adding Task as a new Project"
+    end
 		of_folder = omnifocus_document.folders[$opts[:folder]]
 		new_task = of_folder.make(:new => :project, :with_properties => tprops)
 		puts "Created project in " + $opts[:folder] + " folder: " + tprops[:name]
 	else
 		# Make a new Task in the Project
+    if $DEBUG
+      puts "JOFSYNC.add_task: adding Task to project: " + proj_name
+    end
 		proj.make(:new => :task, :with_properties => tprops)
 		puts "Created task [" + tprops[:name] + "] in project " + proj_name
 	end 
-	
+  if $DEBUG
+    puts "JOFSYNC.add_task: completed method."
+  end
 	return true
 end
 
 # This method is responsible for getting your assigned Jira Tickets and adding them to OmniFocus as Tasks
 def add_jira_tickets_to_omnifocus (omnifocus_document)
 	# Get the open Jira issues assigned to you
+  if $DEBUG
+    puts "JOFSYNC.add_jira_tickets_to_omnifocus: starting method... and about to get_issues"
+  end
 	results = get_issues
 	if results.nil?
 		puts "No results from Jira"
 		exit
 	end
 
+  if $DEBUG
+    puts "JOFSYNC.add_jira_tickets_to_omnifocus: looping through issues found."
+  end
 	# Iterate through resulting issues.
 	results.each do |jira_id, ticket|
+    if $DEBUG
+      puts "JOFSYNC.add_jira_tickets_to_omnifocus: looking at jira_id: " + jira_id
+    end
 		# Create the task name by adding the ticket summary to the jira ticket key
 		task_name = "#{jira_id}: #{ticket["fields"]["summary"]}"
+    if $DEBUG
+      puts "JOFSYNC.add_jira_tickets_to_omnifocus: created task_name: " + task_name
+    end
 		# Create the task notes with the Jira Ticket URL
 		task_notes = "#{$opts[:hostname]}/browse/#{jira_id}\n\n#{ticket["fields"]["description"]}"
 
@@ -186,32 +280,73 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
 		unless ticket["fields"]["duedate"].nil?
 			@props["due_date"] = Date.parse(ticket["fields"]["duedate"])
 		end
+    if $DEBUG
+      puts "JOFSYNC.add_jira_tickets_to_omnifocus: built properties, about to add Task to OmniFocus"
+    end
 		add_task(omnifocus_document, @props)
+    if $DEBUG
+      puts "JOFSYNC.add_jira_tickets_to_omnifocus: task added to OmniFocus."
+    end
 	end
+  if $DEBUG
+    puts "JOFSYNC.add_jira_tickets_to_omnifocus: method complete"
+  end
 end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
 	# get tasks from the project
+  if $DEBUG
+    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: starting method"
+  end
+  if $DEBUG
+    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Getting OmniFocus context: \"" + $opts[:context] + "\""
+  end
 	ctx = omnifocus_document.flattened_contexts[$opts[:context]]
+  if $DEBUG
+    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: OmniFocus Context found, about to iterrate through all tasks in that context"
+  end
 	ctx.tasks.get.find.each do |task|
+    if $DEBUG
+      puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: working on task: " + task.name.get
+    end
 		if !task.completed.get && task.note.get.match($opts[:hostname])
+      if $DEBUG
+        puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: task is NOT already marked complete, so let's check the status of the JIRA ticket."
+      end
 			# try to parse out jira id
 			full_url= task.note.get.lines.first.chomp
+      if $DEBUG
+        puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: got full_url: " + full_url
+      end
 			jira_id=full_url.sub($opts[:hostname]+"/browse/","")
+      if $DEBUG
+        puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: got jira_id: " + jira_id
+      end
 			# check status of the jira
 			uri = URI($opts[:hostname] + '/rest/api/2/issue/' + jira_id)
-
+      if $DEBUG
+        puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: about to hit: " + uri.to_s()
+      end
 			Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
 				request = Net::HTTP::Get.new(uri)
 				request.basic_auth $opts[:username], $opts[:password]
 				response = http.request request
-
+        if $DEBUG
+          puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response code: " + response.code
+          puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response body: " + response.body
+        end
 				if response.code =~ /20[0-9]{1}/
 					data = JSON.parse(response.body)
 					# Check to see if the Jira ticket has been resolved, if so mark it as complete.
 					resolution = data["fields"]["resolution"]
+          if $DEBUG
+            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution: " + resolution.to_s()
+          end
 					if resolution != nil
 						# if resolved, mark it as complete in OmniFocus
+            if $DEBUG
+              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution was non-nil, so marking this Task as completed. "
+            end
 						if task.completed.get != true
 							task.completed.set(true)
 							puts "Marked task completed " + jira_id
@@ -219,11 +354,23 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
 					end
 					# Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
 					# It will be re-created if it is assigned back to you.
+          if $DEBUG
+            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Checking to see if the task was assigned to someone else. "
+          end
 					if ! data["fields"]["assignee"]
+            if $DEBUG
+              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: There is no assignee, so deleting. "
+            end
 						omnifocus_document.delete task
 					else
 						assignee = data["fields"]["assignee"]["name"].downcase
+            if $DEBUG
+              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee
+            end
 						if assignee != $opts[:username].downcase
+              if $DEBUG
+                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
+              end
 							omnifocus_document.delete task
 						end
 					end
@@ -250,12 +397,30 @@ def check_options()
 end
 
 def main ()
+  if $DEBUG
+    puts "JOFSYNC.main: Running..."
+  end
 	if app_is_running("OmniFocus")
+    if $DEBUG
+      puts "JOFSYNC.main: OmniFocus is running so let's go!"
+    end
 		$opts = get_opts
 		check_options()
+    if $DEBUG
+      puts "JOFSYNC.main: Options have been checked, moving on...."
+    end
 		omnifocus_document = get_omnifocus_document
+    if $DEBUG
+      puts "JOFSYNC.main: Got OmniFocus document to work on, about to add JIRA tickets to OmniFocus"
+    end
 		add_jira_tickets_to_omnifocus(omnifocus_document)
+    if $DEBUG
+      puts "JOFSYNC.main: Done adding JIRA tickets to OmniFocus, about to mark resolved JIRA tickets as complete in OmniFocus."
+    end
 		mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document)
+    if $DEBUG
+      puts "JOFSYNC.main: Done!"
+    end
 	end
 end
 

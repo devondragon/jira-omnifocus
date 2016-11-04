@@ -351,28 +351,31 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
 							task.completed.set(true)
 							puts "Marked task completed " + jira_id
 						end
-					end
-					# Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
-					# It will be re-created if it is assigned back to you.
-          if $DEBUG
-            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Checking to see if the task was assigned to someone else. "
-          end
-					if ! data["fields"]["assignee"]
+          else
+            # Moving the assignment check block into the else block here...  The upside is that if you resolve a ticket and assign it back
+            # to the creator, you get the Completed checked task in OF which makes you feel good, instead of the current behavior where the task is deleted and vanishes from OF.    
+  					# Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
+  					# It will be re-created if it is assigned back to you.
             if $DEBUG
-              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: There is no assignee, so deleting. "
+              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Checking to see if the task was assigned to someone else. "
             end
-						omnifocus_document.delete task
-					else
-						assignee = data["fields"]["assignee"]["name"].downcase
-            if $DEBUG
-              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee
-            end
-						if assignee != $opts[:username].downcase
+  					if ! data["fields"]["assignee"]
               if $DEBUG
-                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
+                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: There is no assignee, so deleting. "
               end
-							omnifocus_document.delete task
-						end
+  						omnifocus_document.delete task
+  					else
+  						assignee = data["fields"]["assignee"]["name"].downcase
+              if $DEBUG
+                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee
+              end
+  						if assignee != $opts[:username].downcase
+                if $DEBUG
+                  puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
+                end
+  							omnifocus_document.delete task
+  						end
+  					end    
 					end
 				else
 					raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue

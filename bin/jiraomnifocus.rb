@@ -294,18 +294,14 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
 end
 
 def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
-	# get tasks from the project
+ # get tasks from the project
   if $DEBUG
     puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: starting method"
   end
+  omnifocus_document.flattened_tasks.get.find.each do |task|
   if $DEBUG
-    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Getting OmniFocus context: \"" + $opts[:context] + "\""
+    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: About to iterate through all tasks in OmniFocus document"
   end
-	ctx = omnifocus_document.flattened_contexts[$opts[:context]]
-  if $DEBUG
-    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: OmniFocus Context found, about to iterrate through all tasks in that context"
-  end
-	ctx.tasks.get.find.each do |task|
     if $DEBUG
       puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: working on task: " + task.name.get
     end

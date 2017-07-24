@@ -81,6 +81,18 @@ Sets the OmniFocus folder where new projects are created if `newproj` is `true`.
 
 You can run the script manually with `bundle exec bin/jiraomnifocus.rb`, use OS X's `launchd` to schedule it (this is preferred), or add a cron entry to run it periodically (it will take a minute or so to run so don't run it too often).  If you are using the keychain option, you MUST use the `launchd` scheduler instead of `cron`.
 
+#### If you have SSL Connection errors
+
+This is due to an older version of Ruby not supporting modern cipher suites.  In order to fix this on my Mac (running macOS Sierra 10.12.6) I used rbenv to install ruby 2.1.2, and then I set it to be the global default (you don't have to do this if you change how you launch the script, etc...):
+
+```
+rbenv install 2.1.2
+rbenv global 2.1.2
+```
+
+This solved my SSL Connection errors!  At least when running the script manually, there was still something I had to do to make the launchd solution below work, so please read the section below in detail.
+
+
 #### Running automatically with `launchd`
 To install it in launchd, copy jofsync.plist to ~/Library/LaunchAgents/jofsync.plist
 
@@ -108,6 +120,15 @@ Replace the value of the second `<string>` argument with the path to your local 
   </array>
 ```
 
+Please note that if you had to install a newer version of ruby, such as 2.1.2 in the above section about SSL Connection errors, when launchd runs the script it will not respect your user rbenv settings.  So I edited the ProgramArguments above and changed the path for ruby to:
+
+```
+/Users/your-username/.rbenv/shims/ruby
+```
+
+Which forced the scheduled launchd script to use the ruby 2.1.2 version.
+
+
 **`StartInterval`**
 Replace the integer value to change the time in seconds that controls how often the script will run.
 
@@ -115,6 +136,9 @@ Replace the integer value to change the time in seconds that controls how often 
 <key>StartInterval</key>
   <integer>300</integer>
 ```
+
+
+
 
 Then run:
 

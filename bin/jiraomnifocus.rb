@@ -376,7 +376,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
               end
             end
           else
-            raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
+            raise StandardError, "Unsuccessful response code " + response.code + " for issue " + jira_id
           end
         end
       rescue

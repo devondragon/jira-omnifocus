@@ -320,63 +320,67 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
         puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: got jira_id: " + jira_id
       end
       # check status of the jira
-      uri = URI($opts[:hostname] + '/rest/api/2/issue/' + jira_id)
-      if $DEBUG
-        puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: about to hit: " + uri.to_s()
-      end
-      Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-        request = Net::HTTP::Get.new(uri)
-        request.basic_auth $opts[:username], $opts[:password]
-        response = http.request request
+      begin
+        uri = URI($opts[:hostname] + '/rest/api/2/issue/' + jira_id)
         if $DEBUG
-          puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response code: " + response.code
-          puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response body: " + response.body
+          puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: about to hit: " + uri.to_s()
         end
-        if response.code =~ /20[0-9]{1}/
-          data = JSON.parse(response.body)
-          # Check to see if the Jira ticket has been resolved, if so mark it as complete.
-          resolution = data["fields"]["resolution"]
+        Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+          request = Net::HTTP::Get.new(uri)
+          request.basic_auth $opts[:username], $opts[:password]
+          response = http.request request
           if $DEBUG
-            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution: " + resolution.to_s()
+            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response code: " + response.code
+            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response body: " + response.body
           end
-          if resolution != nil
-            # if resolved, mark it as complete in OmniFocus
+          if response.code =~ /20[0-9]{1}/
+            data = JSON.parse(response.body)
+            # Check to see if the Jira ticket has been resolved, if so mark it as complete.
+            resolution = data["fields"]["resolution"]
             if $DEBUG
-              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution was non-nil, so marking this Task as completed. "
+              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution: " + resolution.to_s()
             end
-            if task.completed.get != true
-              task.completed.set(true)
-              puts "Marked task completed " + jira_id
-            end
-          else
-            # Moving the assignment check block into the else block here...  The upside is that if you resolve a ticket and assign it back
-            # to the creator, you get the Completed checked task in OF which makes you feel good, instead of the current behavior where the task is deleted and vanishes from OF.
-            # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
-            # It will be re-created if it is assigned back to you.
-            if $DEBUG
-              puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Checking to see if the task was assigned to someone else. "
-            end
-            if ! data["fields"]["assignee"]
+            if resolution != nil
+              # if resolved, mark it as complete in OmniFocus
               if $DEBUG
-                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: There is no assignee, so deleting. "
+                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution was non-nil, so marking this Task as completed. "
               end
-              omnifocus_document.delete task
+              if task.completed.get != true
+                task.completed.set(true)
+                puts "Marked task completed " + jira_id
+              end
             else
-              assignee = data["fields"]["assignee"]["name"].downcase
+              # Moving the assignment check block into the else block here...  The upside is that if you resolve a ticket and assign it back
+              # to the creator, you get the Completed checked task in OF which makes you feel good, instead of the current behavior where the task is deleted and vanishes from OF.
+              # Check to see if the Jira ticket has been unassigned or assigned to someone else, if so delete it.
+              # It will be re-created if it is assigned back to you.
               if $DEBUG
-                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee
+                puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: Checking to see if the task was assigned to someone else. "
               end
-              if assignee != $opts[:username].downcase
+              if ! data["fields"]["assignee"]
                 if $DEBUG
-                  puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
+                  puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: There is no assignee, so deleting. "
                 end
                 omnifocus_document.delete task
+              else
+                assignee = data["fields"]["assignee"]["name"].downcase
+                if $DEBUG
+                  puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee
+                end
+                if assignee != $opts[:username].downcase
+                  if $DEBUG
+                    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
+                  end
+                  omnifocus_document.delete task
+                end
               end
             end
+          else
+            raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
           end
-        else
-          raise StandardError, "Unsuccessful response code " + response.code + " for issue " + issue
         end
+      rescue
+        next
       end
     end
   end

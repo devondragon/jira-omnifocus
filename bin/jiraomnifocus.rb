@@ -372,6 +372,21 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
                     puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus"
                   end
                   omnifocus_document.delete task
+                  
+                else 
+                  assignee = data["fields"]["assignee"]["name"].downcase 
+                  assigneeEmail = data["fields"]["assignee"]["emailAddress"].downcase 
+                  
+                  if $DEBUG 
+                    puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: curent assignee is: " + assignee 
+                  end 
+                  
+                  if assignee != $opts[:username].downcase && assigneeEmail != $opts[:username].downcase 
+                    if $DEBUG 
+                      puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: That doesn't match your username of \"" + $opts[:username].downcase + "\" so deleting the task from OmniFocus" 
+                    end 
+                    omnifocus_document.delete task 
+                  end
                 end
               end
             end

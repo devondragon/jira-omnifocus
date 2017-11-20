@@ -46,14 +46,14 @@ In ~/.jofsync.yaml, you'll find various options for configuring your connection 
 The URL of your JIRA project. Make sure to specify `https` if your project requires it.
 
 **`keychain`**
-Set this option to `true` if you wish to pull your JIRA credentials from you OS keychain. If you set this option, jira-omnifocus will ignore any values for `username` or `password` in the config. If you plan to use this option and automate the process of running this script, you must run it with `launchd` and not `cron`. To use the keychain option, you have to create the keychain entry:
+Set this option to `true` if you wish to pull your JIRA credentials from you OS keychain. If you set this option, jira-omnifocus will ignore any values for `password` in the config. If you plan to use this option and automate the process of running this script, you must run it with `launchd` and not `cron`. To use the keychain option, you have to create the keychain entry:
 
 ```
 security add-internet-password -a <username> -s <hostname> -w <password>
 ```
 
 **`username` and `password`**
-Only set these options if you've set `keychain` to `false`. Username should be set to your actual username, NOT your email address.
+Username needs be set to your actual username, NOT your email address.  You only need to set the password if you've set `keychain` to `false`.
 
 **`filter`**
 This is the JQL (JIRA's custom query language) command jira-omnifocus will use to find issues.

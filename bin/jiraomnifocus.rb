@@ -419,8 +419,6 @@ def check_options()
   end
 end
 
-require 'pp'
-
 def main ()
   if $DEBUG
     puts "JOFSYNC.main: Running..."

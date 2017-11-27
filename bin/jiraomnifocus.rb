@@ -22,6 +22,7 @@ jira:
   username: ''
   password: ''
   filter:   'resolution = Unresolved and issue in watchedissues()'
+  ssl_verify: true     # Verify the server certificate
 omnifocus:
   context:  'Office'   # The default OF Context where new tasks are created.
   project:  'Jira'     # The default OF Project where new tasks are created.
@@ -51,6 +52,7 @@ EOS
     opt :password,  'Jira Password',        :type => :string,   :short => 'p', :required => false,   :default => config["jira"]["password"]
     opt :hostname,  'Jira Server Hostname', :type => :string,   :short => 'h', :required => false,   :default => config["jira"]["hostname"]
     opt :filter,    'JQL Filter',           :type => :string,   :short => 'j', :required => false,   :default => config["jira"]["filter"]
+    opt :ssl_verify, 'SSL verification', :type => :boolean,  :short => 's', :required => false,  :default => config['jira'].has_key?('ssl_verify') ? config['jira']['ssl_verify'] : true
     opt :context,   'OF Default Context',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["context"]
     opt :project,   'OF Default Project',   :type => :string,   :short => 'r', :required => false,   :default => config["omnifocus"]["project"]
     opt :flag,      'Flag tasks in OF',     :type => :boolean,  :short => 'f', :required => false,   :default => config["omnifocus"]["flag"]
@@ -95,7 +97,9 @@ def get_issues
   if $DEBUG
     puts "JOFSYNC.get_issues: abount to connect...."
   end
-  Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+
+  verify_mode = $opts[:ssl_verify] ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
+  Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https', :verify_mode => verify_mode) do |http|
     request = Net::HTTP::Get.new(uri)
     request.basic_auth $opts[:username], $opts[:password]
     response = http.request request

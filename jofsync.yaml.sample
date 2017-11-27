@@ -5,6 +5,7 @@ jira:
   username: 'me'
   password: 'secret'
   filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
+  ssl_verify: true     # Verify the server certificate
 omnifocus:
   context:  'Office'   # The default OF Context where new tasks are created.
   project:  'Jira'     # The default OF Project where new tasks are created.

@@ -20,7 +20,7 @@ jira:
   hostname: 'http://please-configure-me-in-jofsync.yaml.atlassian.net'
   keychain: false
   username: ''
-  password: ''
+  password: '' 			# JIRA password OR api_token
   filter:   'resolution = Unresolved and issue in watchedissues()'
   ssl_verify: true     # Verify the server certificate
 omnifocus:

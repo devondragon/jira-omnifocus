@@ -53,7 +53,7 @@ security add-internet-password -a <username> -s <hostname> -w <password>
 ```
 
 **`username` and `password`**
-Username needs be set to your actual username, NOT your email address.  You only need to set the password if you've set `keychain` to `false`.
+Username needs be set to your actual username, NOT your email address.  You only need to set the password if you've set `keychain` to `false`.  If you are using the new api_token for JIRA, just put the token in as the password.
 
 **`filter`**
 This is the JQL (JIRA's custom query language) command jira-omnifocus will use to find issues.

@@ -350,7 +350,7 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
                 puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: resolution was non-nil, so marking this Task as completed. "
               end
               if task.completed.get != true
-                task.completed.set(true)
+                task.mark_complete()
                 puts "Marked task completed " + jira_id
               end
             else

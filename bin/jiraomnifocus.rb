@@ -329,7 +329,10 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
         if $DEBUG
           puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: about to hit: " + uri.to_s()
         end
-        Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+        
+        
+        verify_mode = $opts[:ssl_verify] ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
+        Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https', :verify_mode => verify_mode) do |http|
           request = Net::HTTP::Get.new(uri)
           request.basic_auth $opts[:username], $opts[:password]
           response = http.request request

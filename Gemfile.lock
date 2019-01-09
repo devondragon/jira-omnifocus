@@ -3,15 +3,15 @@ GEM
   specs:
     corefoundation (0.2.0)
       ffi
-    ffi (1.9.18)
-    highline (1.7.8)
+    ffi (1.10.0)
+    highline (2.0.0)
     json (2.1.0)
-    rb-scpt (1.0.2)
+    rb-scpt (1.0.3)
     ruby-keychain (0.3.2)
       corefoundation (~> 0.2.0)
       ffi
-    terminal-notifier (1.8.0)
-    trollop (2.1.2)
+    terminal-notifier (2.0.0)
+    trollop (2.9.9)
 
 PLATFORMS
   ruby
@@ -25,4 +25,4 @@ DEPENDENCIES
   trollop
 
 BUNDLED WITH
-   1.15.4
+   1.16.6

@@ -9,6 +9,7 @@ require 'yaml'
 require 'net/http'
 require 'keychain'
 require 'pathname'
+require 'optimist'
 
 def get_opts
   if  File.file?(ENV['HOME']+'/.jofsync.yaml')
@@ -24,7 +25,7 @@ jira:
   filter:   'resolution = Unresolved and issue in watchedissues()'
   ssl_verify: true     # Verify the server certificate
 omnifocus:
-  context:  'Office'   # The default OF Context where new tasks are created.
+  tag:  'Office'   # The default OF Tag where new tasks are created.
   project:  'Jira'     # The default OF Project where new tasks are created.
   flag:     true       # Set this to 'true' if you want the new tasks to be flagged.
   inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.
@@ -33,7 +34,7 @@ omnifocus:
 EOS
   end
 
-  return Trollop::options do
+  return Optimist::options do
     banner ""
     banner <<-EOS
     Jira OmniFocus Sync Tool
@@ -53,7 +54,7 @@ EOS
     opt :hostname,  'Jira Server Hostname', :type => :string,   :short => 'h', :required => false,   :default => config["jira"]["hostname"]
     opt :filter,    'JQL Filter',           :type => :string,   :short => 'j', :required => false,   :default => config["jira"]["filter"]
     opt :ssl_verify, 'SSL verification', :type => :boolean,  :short => 's', :required => false,  :default => config['jira'].has_key?('ssl_verify') ? config['jira']['ssl_verify'] : true
-    opt :context,   'OF Default Context',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["context"]
+    opt :tag,   'OF Default Tag',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["tag"]
     opt :project,   'OF Default Project',   :type => :string,   :short => 'r', :required => false,   :default => config["omnifocus"]["project"]
     opt :flag,      'Flag tasks in OF',     :type => :boolean,  :short => 'f', :required => false,   :default => config["omnifocus"]["flag"]
     opt :folder,  'OF Default Folder',  :type => :string,  :short => 'o', :required => false,   :default => config["omnifocus"]["folder"]
@@ -190,17 +191,11 @@ def add_task(omnifocus_document, new_task_properties)
 
   return false if exists
 
-  # If there is a passed in OF context name, get the actual context object
-  if new_task_properties['context']
-    ctx_name = new_task_properties["context"]
-    if $DEBUG
-      puts "JOFSYNC.add_task: new task specified a context of: " + ctx_name + " so going to load that up"
-    end
-    ctx = omnifocus_document.flattened_contexts[ctx_name]
-    if $DEBUG
-      puts "JOFSYNC.add_task: context loaded successfully"
-    end
-  end
+	# If there is a passed in OF tag name, get the actual tag object
+	if new_task_properties['tag']
+		tag_name = new_task_properties["tag"]
+		tag = omnifocus_document.flattened_tags[tag_name]
+	end
 
   # Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
   tprops = new_task_properties.inject({}) do |h, (k, v)|
@@ -210,11 +205,12 @@ def add_task(omnifocus_document, new_task_properties)
 
   # Remove the project property from the new Task properties, as it won't be used like that.
   tprops.delete(:project)
-  # Update the context property to be the actual context object not the context name
-  tprops[:context] = ctx if new_task_properties['context']
+  # Update the tag property to be the actual tag object not the tag name
+  tprops.delete(:tag)
+	tprops[:primary_tag] = tag if new_task_properties['tag']
 
   if $DEBUG
-    puts "JOFSYNC.add_task: task props - deleted project and set context"
+    puts "JOFSYNC.add_task: task props - deleted project and set tag"
   end
 
   # Create the task in the appropriate place as set in the config file
@@ -279,7 +275,7 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
     @props = {}
     @props['name'] = task_name
     @props['project'] = $opts[:project]
-    @props['context'] = $opts[:context] if $opts[:context]
+    @props['tag'] = $opts[tag] if $opts[tag]
     @props['note'] = task_notes
     @props['flagged'] = $opts[:flag]
     unless ticket["fields"]["duedate"].nil?

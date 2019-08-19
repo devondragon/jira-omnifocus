@@ -275,7 +275,7 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
     @props = {}
     @props['name'] = task_name
     @props['project'] = $opts[:project]
-    @props['tag'] = $opts[tag] if $opts[tag]
+    @props['tag'] = $opts[:tag] if $opts[:tag]
     @props['note'] = task_notes
     @props['flagged'] = $opts[:flag]
     unless ticket["fields"]["duedate"].nil?

@@ -59,8 +59,8 @@ Username needs be set to your actual username, NOT your email address.  You only
 This is the JQL (JIRA's custom query language) command jira-omnifocus will use to find issues.
 
 #### `omnifocus` configuration options
-**`context`**
-The default OmniFocus context assigned to new tasks. Make sure this context exists in OmniFocus. Leave this blank if you'd prefer not to set a context.
+**`tag`**
+The default OmniFocus tag assigned to new tasks. Make sure this context exists in OmniFocus. Leave this blank if you'd prefer not to set a context.
 
 **`project`**
 The default OmniFocus project assigned to new tasks. Make sure this project exists in OmniFocus. Leave this blank if you'd prefer not to set a project. If you leave this option blank, be sure to set either `inbox` or `newproj` to `true`.

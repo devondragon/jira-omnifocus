@@ -7,7 +7,7 @@ jira:
   filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
   ssl_verify: true     # Verify the server certificate
 omnifocus:
-  context:  'Office'   # The default OF Context where new tasks are created.
+  tag:  'Office'   # The default OF Context where new tasks are created.
   project:  'Jira'     # The default OF Project where new tasks are created.
   flag:     true       # Set this to 'true' if you want the new tasks to be flagged.
   inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.

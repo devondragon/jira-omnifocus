@@ -5,7 +5,7 @@ GEM
       ffi
     ffi (1.11.1)
     highline (2.0.2)
-    json (2.2.0)
+    json (2.3.0)
     optimist (3.0.0)
     rb-scpt (1.0.3)
     ruby-keychain (0.3.2)

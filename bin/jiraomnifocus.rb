@@ -71,7 +71,7 @@ def get_issues
   end
   jira_issues = Hash.new
   # This is the REST URL that will be hit.  Change the jql query if you want to adjust the query used here
-  uri = URI($opts[:hostname] + '/rest/api/2/search?jql=' + URI::encode($opts[:filter]))
+  uri = URI($opts[:hostname] + '/rest/api/2/search?jql=' + URI::encode($opts[:filter]) + '&maxResults=-1')
   if $DEBUG
     puts "JOFSYNC.get_issues: about to hit URL: " + uri.to_s()
   end

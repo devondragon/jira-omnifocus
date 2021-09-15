@@ -6,7 +6,7 @@ http://www.digitalsanctuary.com/tech-blog/general/jira-to-omnifocus-integration.
 
 ## What it does:
 
-It pulls back all unresolved JIRA tickets that are assigned to you and if it hasn't already created a OmniFocus task for that ticket, it creates a new one.  The title of the task is the JIRA ticket number followed by the summary from the ticket.  The note part of the OmniFocus task will contain the URL to the JIRA ticket so you can easily go right to it.  I chose not to pull over the full description, or comment history into the task notes as it's usually more than I want to see in OmniFocus.
+It pulls back all unresolved JIRA tickets that are assigned to you and if it hasn't already created a OmniFocus task for that ticket, it creates a new one.  The title of the task is the JIRA ticket number followed by the summary from the ticket.  The note part of the OmniFocus task will contain the URL to the JIRA ticket so you can easily go right to it.  I chose not to pull over the comment history into the task notes as it's usually more than I want to see in OmniFocus.
 
 It also checks all the OmniFocus tasks that look like they are related to JIRA tickets, and checks to see if the matching ticket has been resolved.  If so, it marks the task as complete. If a task has been re-assigned to someone else or unassigned it will remove it from OmniFocus.
 

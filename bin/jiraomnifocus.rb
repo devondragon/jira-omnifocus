@@ -31,6 +31,7 @@ omnifocus:
   inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.
   newproj:  false      # Set 'true' to add each JIRA ticket to OF as a Project instead of a Task.
   folder:   'Jira'     # Sets the OF folder where new Projects are created (only applies if 'newproj' is 'true').
+  descsync:  false     # Set 'true' if you want JIRA task descriptions synced to OF task notes
 EOS
   end
 
@@ -60,6 +61,7 @@ EOS
     opt :folder,  'OF Default Folder',  :type => :string,  :short => 'o', :required => false,   :default => config["omnifocus"]["folder"]
     opt :inbox,     'Create inbox tasks',  :type => :boolean,  :short => 'i', :required => false,   :default => config["omnifocus"]["inbox"]
     opt :newproj,  'Create as projects',  :type => :boolean,  :short => 'n', :required => false,   :default => config["omnifocus"]["newproj"]
+    opt :descsync,  'Sync Description to Notes',  :type => :boolean,  :short => 'd', :required => false,   :default => config["omnifocus"]["descsync"]
     opt :quiet,     'Disable output',       :type => :boolean,  :short => 'q',                       :default => true
   end
 end
@@ -269,7 +271,11 @@ def add_jira_tickets_to_omnifocus (omnifocus_document)
       puts "JOFSYNC.add_jira_tickets_to_omnifocus: created task_name: " + task_name
     end
     # Create the task notes with the Jira Ticket URL
-    task_notes = "#{$opts[:hostname]}/browse/#{jira_id}\n\n#{ticket["fields"]["description"]}"
+    if $opts[:descsync]
+      task_notes = "#{$opts[:hostname]}/browse/#{jira_id}\n\n#{ticket["fields"]["description"]}"
+    else
+      task_notes = "#{$opts[:hostname]}/browse/#{jira_id}\n"
+    end
 
     # Build properties for the Task
     @props = {}

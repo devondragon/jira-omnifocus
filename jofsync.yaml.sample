@@ -12,4 +12,5 @@ omnifocus:
   flag:     true       # Set this to 'true' if you want the new tasks to be flagged.
   inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.
   newproj:  false      # Set 'true' to add each JIRA ticket to OF as a Project instead of a Task.
+  descsync: false      # Set 'true' if you want JIRA task descriptions synced to OF task notes
   folder:   'Jira'     # Sets the OF folder where new Projects are created (only applies if 'newproj' is 'true').

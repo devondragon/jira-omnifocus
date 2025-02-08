@@ -1,5 +1,10 @@
 # jira-omnifocus
 
+
+## NOTE!
+This may be out of date as I no longer use OmniFocus and have not kept up on this.  Sorry!
+
+
 Ruby script to create and manage OmniFocus tasks based on your JIRA tickets
 
 http://www.digitalsanctuary.com/tech-blog/general/jira-to-omnifocus-integration.html

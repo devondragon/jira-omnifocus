@@ -1,0 +1,135 @@
+name: "Automated Changelog"
+
+on:
+  push:
+    branches: [ master, main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  update-changelog:
+    name: "Update Changelog"
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Check if CHANGELOG.md exists, create if not
+          if [ ! -f CHANGELOG.md ]; then
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          # Get the latest tag
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -n "$latest_tag" ]; then
+            echo "Latest tag: $latest_tag"
+            # Get commits since last tag
+            commits=$(git log --pretty=format:"- %s (%h)" "$latest_tag"..HEAD)
+          else
+            echo "No previous tags found, getting all commits"
+            commits=$(git log --pretty=format:"- %s (%h)")
+          fi
+          
+          if [ -n "$commits" ]; then
+            echo "unreleased_changes<<EOF" >> $GITHUB_OUTPUT
+            echo "$commits" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update unreleased section
+        if: steps.changelog.outputs.has_changes == 'true'
+        run: |
+          # Create a temporary file with the new unreleased section
+          cat > temp_changelog.md << 'EOF'
+          # Changelog
+          
+          All notable changes to this project will be documented in this file.
+          
+          ## [Unreleased]
+          
+          ${{ steps.changelog.outputs.unreleased_changes }}
+          
+          EOF
+          
+          # Append the rest of the existing changelog (skip first few lines)
+          if [ -f CHANGELOG.md ]; then
+            tail -n +4 CHANGELOG.md >> temp_changelog.md
+          fi
+          
+          # Replace the original
+          mv temp_changelog.md CHANGELOG.md
+
+      - name: Commit changelog updates
+        if: steps.changelog.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "chore: update changelog with recent changes"
+            git push
+          fi
+
+  release-changelog:
+    name: "Release Changelog"
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes
+        id: release_notes
+        run: |
+          tag_name=${GITHUB_REF#refs/tags/}
+          echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
+          
+          # Get commits since last tag
+          prev_tag=$(git describe --tags --abbrev=0 $tag_name^ 2>/dev/null || echo "")
+          
+          if [ -n "$prev_tag" ]; then
+            echo "Getting changes since $prev_tag"
+            changes=$(git log --pretty=format:"- %s (%h)" "$prev_tag".."$tag_name")
+          else
+            echo "No previous tag, getting all changes"
+            changes=$(git log --pretty=format:"- %s (%h)" "$tag_name")
+          fi
+          
+          # Create release notes
+          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+          echo "## Changes in $tag_name" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "$changes" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$prev_tag...$tag_name" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_notes.outputs.tag_name }}
+          body: ${{ steps.release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: false

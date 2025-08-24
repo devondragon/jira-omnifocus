@@ -1,0 +1,94 @@
+name: "Dependency Check"
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  security-audit:
+    name: "Security Audit"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run bundle audit
+        run: bundle exec bundler-audit --update
+
+      - name: Check for known vulnerabilities
+        run: |
+          echo "Running comprehensive security audit..."
+          bundle exec bundler-audit --format json --output tmp/audit_results.json || true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-results
+          path: tmp/audit_results.json
+
+  dependency-review:
+    name: "Dependency Review"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+
+  outdated-check:
+    name: "Check for Outdated Dependencies"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Check for outdated gems
+        run: |
+          echo "Checking for outdated dependencies..."
+          bundle outdated --strict || echo "Some gems are outdated"
+
+      - name: Generate dependency report
+        run: |
+          echo "# Dependency Report" > dependency_report.md
+          echo "Generated on: $(date)" >> dependency_report.md
+          echo "" >> dependency_report.md
+          echo "## Outdated Dependencies" >> dependency_report.md
+          bundle outdated --parseable >> dependency_report.md || true
+
+      - name: Upload dependency report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-report
+          path: dependency_report.md

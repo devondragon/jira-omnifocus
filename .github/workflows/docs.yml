@@ -1,0 +1,133 @@
+name: "Documentation"
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  yard-docs:
+    name: "Generate YARD Documentation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Generate YARD documentation
+        run: |
+          bundle exec yard doc --output-dir tmp/yard_docs
+          echo "Documentation generated in tmp/yard_docs/"
+
+      - name: Check documentation coverage
+        run: |
+          bundle exec yard stats --list-undoc | tee tmp/yard_coverage.txt
+          echo "Documentation coverage report generated"
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: yard-documentation
+          path: |
+            tmp/yard_docs/
+            tmp/yard_coverage.txt
+
+  test-coverage-report:
+    name: "Test Coverage Report"
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run tests with coverage
+        run: bundle exec rspec --format progress
+
+      - name: Generate coverage badge data
+        run: |
+          if [ -f coverage/.resultset.json ]; then
+            echo "Extracting coverage percentage..."
+            # Extract coverage percentage for badge generation
+            ruby -r json -e "
+              data = JSON.parse(File.read('coverage/.resultset.json'))
+              coverage = data.values.first['coverage']
+              total = coverage.values.sum
+              covered = coverage.values.count { |v| v && v > 0 }
+              percentage = (covered.to_f / total * 100).round(2)
+              puts \"Coverage: #{percentage}%\"
+              File.write('tmp/coverage_percentage.txt', percentage.to_s)
+            " || echo "Could not extract coverage data"
+          fi
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            tmp/coverage_percentage.txt
+
+  readme-validation:
+    name: "Validate README and Documentation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check README exists
+        run: |
+          if [ -f README.md ]; then
+            echo "✅ README.md exists"
+          else
+            echo "❌ README.md not found"
+            exit 1
+          fi
+
+      - name: Validate Markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.github/mlc_config.json'
+        continue-on-error: true
+
+      - name: Check for required documentation sections
+        run: |
+          echo "Checking README.md for required sections..."
+          
+          required_sections=("Installation" "Usage" "Configuration" "Development")
+          missing_sections=()
+          
+          for section in "${required_sections[@]}"; do
+            if ! grep -q "# $section\|## $section" README.md; then
+              missing_sections+=("$section")
+            fi
+          done
+          
+          if [ ${#missing_sections[@]} -eq 0 ]; then
+            echo "✅ All required documentation sections found"
+          else
+            echo "❌ Missing documentation sections: ${missing_sections[*]}"
+            echo "Consider adding these sections to improve documentation"
+          fi

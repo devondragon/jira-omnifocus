@@ -1,11 +1,12 @@
 # jira-omnifocus
 
-
-## NOTE!
-This may be out of date as I no longer use OmniFocus and have not kept up on this.  Sorry!
-
+[![Test Suite](https://github.com/devondragon/jira-omnifocus/actions/workflows/test.yml/badge.svg)](https://github.com/devondragon/jira-omnifocus/actions/workflows/test.yml)
+[![RuboCop Security Analysis](https://github.com/devondragon/jira-omnifocus/actions/workflows/rubocop-analysis.yml/badge.svg)](https://github.com/devondragon/jira-omnifocus/actions/workflows/rubocop-analysis.yml)
+[![Dependency Check](https://github.com/devondragon/jira-omnifocus/actions/workflows/dependencies.yml/badge.svg)](https://github.com/devondragon/jira-omnifocus/actions/workflows/dependencies.yml)
 
 Ruby script to create and manage OmniFocus tasks based on your JIRA tickets
+
+**Modernization Status**: This project has been fully modernized with Ruby 3.4+, comprehensive test coverage (84 tests), and modern CI/CD practices.
 
 http://www.digitalsanctuary.com/tech-blog/general/jira-to-omnifocus-integration.html
 

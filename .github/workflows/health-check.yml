@@ -1,0 +1,132 @@
+name: "Health Check"
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  system-health:
+    name: "System Health Check"
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Quick smoke test
+        run: |
+          echo "Running smoke tests..."
+          
+          # Test that main script loads
+          bundle exec ruby -c bin/jiraomnifocus.rb
+          echo "✅ Main script syntax OK"
+          
+          # Test that all lib files load
+          for file in lib/**/*.rb; do
+            bundle exec ruby -c "$file"
+            echo "✅ $file syntax OK"
+          done
+
+      - name: Test core functionality
+        run: |
+          echo "Testing core module loading..."
+          bundle exec ruby -e "
+            require_relative 'lib/jira_omnifocus'
+            puts '✅ Core modules load successfully'
+            
+            # Test basic class instantiation
+            config_data = {
+              hostname: 'https://test.atlassian.net',
+              username: 'test',
+              password: 'test',
+              filter: 'test'
+            }
+            config = JiraOmnifocus::Configuration.new(config_data)
+            puts '✅ Configuration class works'
+            
+            logger = JiraOmnifocus::Logger.new
+            puts '✅ Logger class works'
+            
+            puts '✅ All core functionality tests passed'
+          "
+
+      - name: Run subset of tests
+        run: |
+          echo "Running critical test subset..."
+          bundle exec rspec spec/unit/validation_spec.rb spec/unit/logger_spec.rb --format progress
+
+      - name: Check for critical security issues
+        run: |
+          echo "Running security health check..."
+          bundle exec bundler-audit --update
+          echo "✅ Security audit clean"
+
+      - name: Generate health report
+        run: |
+          echo "# Daily Health Check Report" > health_report.md
+          echo "Generated: $(date)" >> health_report.md
+          echo "" >> health_report.md
+          echo "## Status: ✅ HEALTHY" >> health_report.md
+          echo "" >> health_report.md
+          echo "- Script syntax validation: ✅ PASS" >> health_report.md
+          echo "- Core module loading: ✅ PASS" >> health_report.md
+          echo "- Critical tests: ✅ PASS" >> health_report.md
+          echo "- Security audit: ✅ PASS" >> health_report.md
+          echo "" >> health_report.md
+          echo "System is operating normally." >> health_report.md
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-health-report
+          path: health_report.md
+
+  workflow-status:
+    name: "Workflow Status Check"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check recent workflow runs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: workflows } = await github.rest.actions.listRepoWorkflows({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            console.log('Active Workflows:');
+            for (const workflow of workflows.workflows) {
+              console.log(`- ${workflow.name}: ${workflow.state}`);
+            }
+            
+            // Check recent runs
+            const { data: runs } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 10
+            });
+            
+            console.log('\nRecent Workflow Runs:');
+            for (const run of runs.workflow_runs) {
+              const date = new Date(run.created_at).toISOString().split('T')[0];
+              console.log(`- ${run.name}: ${run.conclusion} (${date})`);
+            }
+            
+            const failedRuns = runs.workflow_runs.filter(run => run.conclusion === 'failure');
+            if (failedRuns.length > 0) {
+              console.log(`\n⚠️ ${failedRuns.length} recent workflow failures detected`);
+            } else {
+              console.log('\n✅ No recent workflow failures');
+            }

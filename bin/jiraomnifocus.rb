@@ -401,7 +401,16 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
             raise StandardError, "Unsuccessful response code " + response.code + " for issue " + jira_id
           end
         end
-      rescue
+      rescue Net::HTTPError => e
+        puts "HTTP Error for JIRA #{jira_id}: #{e.message}"
+        puts e.backtrace.first(5).join("\n") if $DEBUG
+        next
+      rescue JSON::ParserError => e
+        puts "Failed to parse JIRA response for #{jira_id}: #{e.message}"
+        next
+      rescue StandardError => e
+        puts "Unexpected error processing #{jira_id}: #{e.class} - #{e.message}"
+        puts e.backtrace.first(10).join("\n") if $DEBUG
         next
       end
     end

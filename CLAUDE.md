@@ -4,80 +4,146 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-jira-omnifocus is a Ruby script that syncs JIRA tickets with OmniFocus tasks. It:
-- Creates OmniFocus tasks from JIRA tickets assigned to you
-- Marks OmniFocus tasks complete when JIRA tickets are resolved
-- Removes tasks when tickets are reassigned or unassigned
+jira-omnifocus is a macOS-only Ruby application that syncs JIRA tickets with OmniFocus tasks. The project has been modernized with Ruby 3.4+ support, comprehensive test coverage (84 tests), and modern CI/CD practices.
+
+**Platform**: macOS only (OmniFocus and AppleScript dependencies)  
+**Ruby Version**: 3.2+ required (3.4 supported)  
+**Default Branch**: `main`
 
 ## Development Commands
 
-### Setup and Dependencies
+### Quick Start with Makefile
 ```bash
-# Install bundler if not present
-gem install bundler
+# Initial setup
+make setup
 
-# Install project dependencies
+# Run tests
+make test                  # Run all tests
+make test-unit            # Unit tests only
+make test-integration     # Integration tests only
+make test-coverage        # With coverage report
+
+# Code quality
+make lint                 # Run RuboCop
+make lint-fix            # Auto-fix violations
+make security            # Security audit
+
+# Development
+make dev                  # Run with debug output
+make validate            # Validate script syntax
+make check-release        # Run all pre-release checks
+```
+
+### Manual Commands
+```bash
+# Install dependencies
 bundle install
-```
 
-### Running the Script
-```bash
-# Run manually
+# Run the script
 bundle exec bin/jiraomnifocus.rb
-
-# Test with debug output
 DEBUG=true bundle exec bin/jiraomnifocus.rb
-```
 
-### Configuration
-The script requires a configuration file at `~/.jofsync.yaml`. Copy the sample:
-```bash
-cp jofsync.yaml.sample ~/.jofsync.yaml
+# Run specific tests
+bundle exec rspec spec/unit/jira_client_spec.rb
+COVERAGE=false bundle exec rspec --format documentation
 ```
 
 ## Architecture
 
-### Core Components
+### Refactored Module Structure
 
-**bin/jiraomnifocus.rb** - Main script (456 lines)
-- Entry point and orchestration
-- Key methods:
-  - `get_issues` - Fetches JIRA tickets via REST API (lines 70-138)
-  - `add_task` - Creates OmniFocus tasks (lines 141-246)
-  - `add_jira_tickets_to_omnifocus` - Main sync logic (lines 249-301)
-  - `mark_resolved_jira_tickets_as_complete_in_omnifocus` - Updates task status (lines 303-411)
+**lib/jira_omnifocus/**
+- `jira_client.rb` - JIRA API communication with HTTPS enforcement
+- `omnifocus_client.rb` - OmniFocus AppleScript integration with optimized lookups
+- `configuration.rb` - Config management with validation and Keychain support
+- `logger.rb` - Structured logging with multiple levels
+- `validation.rb` - Input validation and sanitization
+- `version.rb` - Version management
 
-### Data Flow
-1. Script reads config from `~/.jofsync.yaml`
-2. Fetches issues from JIRA REST API using JQL filter
-3. Creates/updates OmniFocus tasks via AppleScript bridge (rb-scpt)
-4. Marks completed tickets and removes reassigned ones
+**bin/jiraomnifocus.rb**
+- Main entry point (~450 lines)
+- Orchestrates sync between JIRA and OmniFocus
+- Uses extracted modules for cleaner separation
 
-### Configuration Structure
-- **jira**: Connection settings, credentials, JQL filter
-- **omnifocus**: Task creation settings (project, tag, flags, inbox mode)
+### Key Architectural Patterns
 
-### Key Dependencies
-- `rb-scpt` - AppleScript bridge for OmniFocus automation
-- `ruby-keychain` - macOS keychain integration for credentials
-- `terminal-notifier` - User notifications
-- `optimist` - Command-line option parsing
+1. **Security First**: HTTPS enforced, SSL verification warnings, Keychain integration
+2. **Performance Optimized**: AppleScript queries for O(1) lookups vs O(n) iteration
+3. **Error Handling**: Comprehensive error catching with user notifications
+4. **Modular Design**: Extracted concerns into focused modules
 
-### Authentication Options
-1. Direct password in config
-2. JIRA API token as password
-3. macOS Keychain storage (recommended for automation)
+### Configuration
 
-### Task Creation Modes
-- **Standard**: Tasks in specific project
-- **Inbox**: Tasks go to OmniFocus inbox
-- **Project**: Each JIRA ticket becomes a project
+Config file: `~/.jofsync.yaml`
+- JIRA settings: hostname, credentials, JQL filter
+- OmniFocus settings: project, tag, folder, inbox mode
+- Security: Keychain support recommended over plaintext passwords
 
-## Important Implementation Details
+## Test Infrastructure
 
-- Uses JIRA REST API v2 (`/rest/api/2/search` and `/rest/api/2/issue/`)
-- Handles SSL verification (configurable)
-- UTF-8 encoding for task names (line 170, 179, 188)
-- Supports due dates from JIRA tickets
-- Optional description sync to task notes
-- Duplicate prevention by checking existing task names
+### Test Coverage
+- **Unit Tests**: 75+ tests covering all modules
+- **Integration Tests**: Task synchronization workflows
+- **Security Tests**: HTTPS enforcement, SSL verification
+- **Performance Tests**: Benchmark suite
+
+### Running Tests
+```bash
+# Full test suite with coverage
+bundle exec rspec
+
+# Specific test file
+bundle exec rspec spec/unit/security_spec.rb
+
+# Without coverage overhead
+COVERAGE=false bundle exec rspec
+```
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflows
+- **test.yml**: Matrix testing on Ruby 3.2, 3.3, 3.4 (macOS only)
+- **rubocop-analysis.yml**: Security and code quality scanning
+- **dependencies.yml**: Vulnerability monitoring with bundler-audit
+- **changelog.yml**: Automated changelog generation
+- **docs.yml**: Documentation generation and coverage
+
+### Pre-Release Checks
+```bash
+make check-release  # Runs all validation steps
+```
+
+## Security Considerations
+
+1. **HTTPS Required**: HTTP connections rejected with clear error
+2. **SSL Verification**: Enabled by default, warning logged if disabled
+3. **Keychain Storage**: Recommended for credentials
+4. **No Secrets in Code**: Configuration separated from codebase
+5. **Dependency Scanning**: Automated vulnerability checks in CI
+
+## Performance Optimizations
+
+1. **AppleScript Queries**: Direct OmniFocus queries instead of iteration
+2. **Batch Operations**: `batch_get_issues` for multiple JIRA tickets
+3. **UTF-8 Encoding**: Global encoding set for consistency
+4. **Timeout Constants**: Configurable HTTP timeouts (30s read, 10s open)
+
+## Common Issues and Solutions
+
+### SSL Connection Errors
+- Update to Ruby 3.2+ for modern cipher support
+- Verify JIRA hostname uses HTTPS
+- Check SSL certificate validity
+
+### Keychain Access
+```bash
+# Add credentials to Keychain
+security add-internet-password -a <username> -s <hostname> -w <password>
+
+# Must use launchd (not cron) for Keychain access
+```
+
+### OmniFocus Integration
+- Requires OmniFocus 3+ installed
+- AppleScript access must be enabled in System Preferences
+- Tasks identified by name uniqueness

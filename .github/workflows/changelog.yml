@@ -2,7 +2,7 @@ name: "Automated Changelog"
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ main ]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
   update-changelog:
     name: "Update Changelog"
     runs-on: macos-latest
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     
     steps:
       - name: Checkout repository

@@ -1,516 +1,918 @@
-# JIRA-OmniFocus Improvement Plan
+# JIRA-OmniFocus Comprehensive Modernization Plan
 
 ## Overview
-This document outlines critical improvements needed for the jira-omnifocus Ruby script, organized by priority with specific implementation steps.
+This document outlines a complete modernization roadmap for the jira-omnifocus Ruby script, transforming it from a legacy 2015-era script into a modern, maintainable application. The plan is organized by priority with proper dependency management and implementation order.
 
-## Priority Levels
-- 🔴 **CRITICAL**: Security vulnerabilities requiring immediate attention
-- 🟠 **HIGH**: Major bugs or performance issues affecting functionality
-- 🟡 **MEDIUM**: Code quality issues impacting maintainability
-- 🟢 **LOW**: Minor improvements and optimizations
+## Priority & Dependency Framework
+- 🔴 **CRITICAL**: Security vulnerabilities, compatibility issues (Immediate)
+- 🟠 **HIGH**: Performance, reliability, major bugs (Week 1-2)  
+- 🟡 **MEDIUM**: Code quality, maintainability, testing (Week 3-4)
+- 🟢 **LOW**: Feature enhancements, user experience (Week 5+)
 
----
-
-## 🔴 CRITICAL FIXES (Week 1)
-
-### 1. ✅ Remove Password Exposure in Debug Mode - **COMPLETED**
-**Location**: `bin/jiraomnifocus.rb:92-94`  
-**Risk**: Passwords can be logged to console when DEBUG=true  
-**Status**: Fixed in PR #59, merged to master
-
-#### Implementation Steps:
-1. Create a `SecureConfig` class that redacts sensitive fields:
-```ruby
-class SecureConfig
-  attr_reader :hostname, :username, :filter, :ssl_verify
-  
-  def initialize(opts)
-    @hostname = opts[:hostname]
-    @username = opts[:username]
-    @password = opts[:password]
-    @filter = opts[:filter]
-    @ssl_verify = opts[:ssl_verify]
-  end
-  
-  def password
-    @password
-  end
-  
-  def to_s
-    {
-      hostname: @hostname,
-      username: @username,
-      password: '[REDACTED]',
-      filter: @filter,
-      ssl_verify: @ssl_verify
-    }.to_s
-  end
-end
-```
-
-2. Replace all debug statements that could expose passwords:
-```ruby
-# Before
-puts "JOFSYNC.get_issues: username and password loaded from Keychain" if $DEBUG
-
-# After  
-puts "JOFSYNC.get_issues: credentials loaded from Keychain" if $DEBUG
-```
-
-3. Never log response bodies that might contain auth tokens
-
-### 2. ✅ Fix Silent Exception Swallowing - **COMPLETED**
-**Location**: `bin/jiraomnifocus.rb:406`  
-**Risk**: Critical errors are hidden, making debugging impossible  
-**Status**: Fixed in PR #60, merged to master
-
-#### Implementation Steps:
-1. Replace bare rescue with specific exception handling:
-```ruby
-# Current dangerous code (line 406-408):
-rescue
-  next
-end
-
-# Replace with:
-rescue Net::HTTPError => e
-  puts "HTTP Error for JIRA #{jira_id}: #{e.message}"
-  puts e.backtrace.first(5).join("\n") if $DEBUG
-  next
-rescue JSON::ParserError => e
-  puts "Failed to parse JIRA response for #{jira_id}: #{e.message}"
-  next
-rescue StandardError => e
-  puts "Unexpected error processing #{jira_id}: #{e.class} - #{e.message}"
-  puts e.backtrace.first(10).join("\n") if $DEBUG
-  next
-end
-```
-
-2. Add logging to file for persistent error tracking:
-```ruby
-require 'logger'
-
-class JiraOmniFocus
-  def initialize
-    @logger = Logger.new(File.expand_path('~/.jofsync.log'))
-    @logger.level = $DEBUG ? Logger::DEBUG : Logger::INFO
-  end
-  
-  def log_error(context, error)
-    @logger.error("#{context}: #{error.class} - #{error.message}")
-    @logger.debug(error.backtrace.join("\n")) if error.backtrace
-  end
-end
-```
+## Current State Analysis
+- **Ruby**: 2.6 (CI) vs 3.4.1 (local) - 8+ versions behind
+- **Dependencies**: Mix of 2014-2019 gems with security vulnerabilities
+- **Architecture**: 460+ line monolithic script with global variables
+- **Testing**: Zero automated test coverage
+- **CI/CD**: Already failing with compatibility issues
 
 ---
 
-## 🟠 HIGH PRIORITY FIXES (Week 2)
+## 🔴 PHASE 1: CRITICAL FOUNDATION (Week 1)
+**Priority: Immediate - Project Stability & Security**
 
-### 4. Fix N+1 Query Performance Problem
-**Location**: `bin/jiraomnifocus.rb:303-411`  
-**Impact**: Poor performance with many tasks
+### 1.1 ✅ Security Fixes - **COMPLETED**
+- ✅ Remove password exposure in debug mode (PR #59)
+- ✅ Fix silent exception swallowing (PR #60) 
+- ✅ Fix N+1 query performance problem (PR #61)
+- ✅ Fix CI/CD Ruby version compatibility issues
 
-#### Implementation Steps:
-1. Collect all JIRA IDs first:
-```ruby
-def get_jira_ids_from_omnifocus(omnifocus_document)
-  jira_ids = []
-  omnifocus_document.flattened_tasks.get.each do |task|
-    if !task.completed.get && task.note.get.match($opts[:hostname])
-      full_url = task.note.get.lines.first.chomp
-      jira_id = full_url.sub($opts[:hostname] + "/browse/", "")
-      jira_ids << jira_id
-    end
-  end
-  jira_ids
-end
-```
-
-2. Batch fetch JIRA statuses:
-```ruby
-def batch_fetch_jira_statuses(jira_ids)
-  return {} if jira_ids.empty?
-  
-  # Use JQL to fetch multiple issues at once
-  jql = "key in (#{jira_ids.join(',')})"
-  uri = URI("#{$opts[:hostname]}/rest/api/2/search?jql=#{URI.encode_www_form_component(jql)}&fields=resolution,assignee")
-  
-  # Make single API call
-  response = make_jira_request(uri)
-  
-  # Build status hash
-  statuses = {}
-  JSON.parse(response.body)["issues"].each do |issue|
-    statuses[issue["key"]] = {
-      resolution: issue["fields"]["resolution"],
-      assignee: issue["fields"]["assignee"]
-    }
-  end
-  statuses
-end
-```
-
-3. Refactor main method to use cached data:
-```ruby
-def mark_resolved_jira_tickets_as_complete_in_omnifocus(omnifocus_document)
-  # Collect all JIRA IDs
-  jira_ids = get_jira_ids_from_omnifocus(omnifocus_document)
-  
-  # Batch fetch statuses
-  jira_statuses = batch_fetch_jira_statuses(jira_ids)
-  
-  # Process tasks with cached data
-  omnifocus_document.flattened_tasks.get.each do |task|
-    next if task.completed.get
-    next unless task.note.get.match($opts[:hostname])
-    
-    jira_id = extract_jira_id(task)
-    status = jira_statuses[jira_id]
-    
-    next unless status
-    
-    process_task_status(task, jira_id, status)
-  end
-end
-```
-
-### 5. Add Input Validation
-**Location**: `bin/jiraomnifocus.rb:76`  
-**Risk**: Injection attacks via malformed hostnames
+### 1.2 Ruby & Bundler Modernization
+**Dependencies: None | Blocks: All other improvements**
 
 #### Implementation Steps:
-1. Create validation module:
+1. **Add .ruby-version file**:
 ```ruby
-module Validation
-  VALID_HOSTNAME_REGEX = /\Ahttps?:\/\/[a-zA-Z0-9\-\.]+(\:[0-9]+)?(\/[a-zA-Z0-9\-\.\/]*)?\z/
-  VALID_USERNAME_REGEX = /\A[a-zA-Z0-9\-_\.@]+\z/
-  
-  def self.validate_hostname!(hostname)
-    unless hostname =~ VALID_HOSTNAME_REGEX
-      raise ArgumentError, "Invalid hostname format: #{hostname}"
-    end
-    
-    # Additional check for common mistakes
-    if hostname.end_with?('/')
-      raise ArgumentError, "Hostname should not end with '/': #{hostname}"
-    end
-    
-    hostname
-  end
-  
-  def self.validate_username!(username)
-    unless username =~ VALID_USERNAME_REGEX
-      raise ArgumentError, "Invalid username format: #{username}"
-    end
-    username
-  end
-  
-  def self.sanitize_jql(filter)
-    # Basic JQL injection prevention
-    filter.gsub(/['";]/, '')
-  end
+# .ruby-version
+3.3.6
+```
+
+2. **Update Gemfile with modern Ruby requirement**:
+```ruby
+ruby '~> 3.3.0'
+
+source 'https://rubygems.org'
+
+# Core dependencies with version constraints
+gem 'json', '~> 2.9.0'          # 2.3.0 → 2.9.0+ (performance, security)
+gem 'optimist', '~> 3.1.0'      # 3.0.0 → 3.1.0+ (bug fixes)
+gem 'highline', '~> 3.1.0'      # 2.0.2 → 3.1.0+ (Unicode support)
+
+# macOS-specific dependencies
+gem 'rb-scpt', '~> 1.0.3'           # AppleScript bridge (no updates)
+gem 'ruby-keychain', '~> 0.3.2'     # Keychain integration
+gem 'terminal-notifier', '~> 2.0.2' # 2.0.0 → 2.0.2+ (macOS compatibility)
+
+# Development and quality tools
+group :development do
+  gem 'rspec', '~> 3.13.0'
+  gem 'rubocop', '~> 1.69.0'
+  gem 'rubocop-performance', '~> 1.24.0'
+  gem 'rubocop-rspec', '~> 3.3.0'  
+  gem 'bundler-audit', '~> 0.9.0'
+  gem 'yard', '~> 0.9.0'
 end
 ```
 
-2. Apply validation in `get_opts`:
-```ruby
-def get_opts
-  # ... existing code ...
-  
-  opts = Optimist::options do
-    # ... existing options ...
-  end
-  
-  # Validate inputs
-  opts[:hostname] = Validation.validate_hostname!(opts[:hostname])
-  opts[:username] = Validation.validate_username!(opts[:username])
-  opts[:filter] = Validation.sanitize_jql(opts[:filter])
-  
-  opts
-end
+3. **Update CI Ruby version**:
+```yaml
+# .github/workflows/rubocop-analysis.yml
+- name: Set up Ruby
+  uses: ruby/setup-ruby@v1
+  with:
+    ruby-version: '3.3'
+    bundler-cache: true
 ```
 
-### 6. Refactor Large Methods
-**Location**: `bin/jiraomnifocus.rb:303-411`  
-**Impact**: Unmaintainable code, difficult to test
+4. **Test script compatibility with Ruby 3.3**:
+```bash
+bundle update
+ruby -c bin/jiraomnifocus.rb
+bundle exec bin/jiraomnifocus.rb --help
+```
+
+### 1.3 Security Audit & Updates
+**Dependencies: Ruby update | Blocks: Production deployment**
 
 #### Implementation Steps:
-1. Break down `mark_resolved_jira_tickets_as_complete_in_omnifocus`:
-```ruby
-class TaskSynchronizer
-  def sync_resolved_tickets(omnifocus_document)
-    tasks = get_jira_linked_tasks(omnifocus_document)
-    statuses = fetch_jira_statuses(tasks.keys)
-    
-    tasks.each do |jira_id, task|
-      sync_single_task(task, jira_id, statuses[jira_id])
-    end
-  end
-  
-  private
-  
-  def get_jira_linked_tasks(document)
-    # Extract JIRA-linked tasks
-  end
-  
-  def fetch_jira_statuses(jira_ids)
-    # Batch fetch from JIRA
-  end
-  
-  def sync_single_task(task, jira_id, status)
-    return unless status
-    
-    if status[:resolution]
-      mark_task_complete(task, jira_id)
-    elsif should_remove_task?(status)
-      remove_task(task, jira_id)
-    end
-  end
-  
-  def should_remove_task?(status)
-    return true unless status[:assignee]
-    
-    assignee_name = status[:assignee]["name"].downcase
-    assignee_email = status[:assignee]["emailAddress"].downcase
-    
-    current_user = @config.username.downcase
-    assignee_name != current_user && assignee_email != current_user
-  end
-end
+1. **Add security tools**:
+```bash
+bundle add bundler-audit
+bundle exec bundler-audit check
+```
+
+2. **Create security workflow**:
+```yaml
+# .github/workflows/security.yml
+name: Security Audit
+on: 
+  push:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly Monday 2 AM
+
+jobs:
+  security:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec bundler-audit check
+      - run: bundle exec brakeman --no-pager --format json
+```
+
+3. **Fix immediate vulnerabilities**:
+```bash
+# Update vulnerable dependencies
+bundle update ffi        # 1.11.1 → 1.17.0+ (compilation fixes)
+bundle update json       # 2.3.0 → 2.9.0+ (security patches)
+bundle update highline   # 2.0.2 → 3.1.0+ (security improvements)
+```
+
+### 1.4 Compatibility Testing Matrix
+**Dependencies: Ruby/gem updates | Blocks: Release confidence**
+
+#### Create compatibility test matrix:
+```yaml
+# .github/workflows/test-matrix.yml
+strategy:
+  matrix:
+    ruby: ['3.1', '3.2', '3.3', '3.4']
+    os: ['macos-12', 'macos-13', 'macos-14', 'macos-15']
 ```
 
 ---
 
-## 🟡 MEDIUM PRIORITY FIXES (Week 3)
+## 🟠 PHASE 2: HIGH PRIORITY IMPROVEMENTS (Week 2)
+**Priority: Core Functionality & Performance**
 
-### 7. Eliminate Global Variables
-**Location**: Throughout, especially `$opts` and `$DEBUG`
+### 2.1 Input Validation & Security Hardening
+**Dependencies: Ruby 3.3+ | Blocks: Production security**
 
 #### Implementation Steps:
-1. Create application class:
+1. **Create validation module**:
 ```ruby
-class JiraOmniFocusApp
-  attr_reader :config, :logger
-  
-  def initialize(args = ARGV)
-    @config = Configuration.new(args)
-    @logger = setup_logger
-    @jira_client = JiraClient.new(@config, @logger)
-    @omnifocus_client = OmniFocusClient.new(@config, @logger)
-    @synchronizer = TaskSynchronizer.new(@jira_client, @omnifocus_client, @logger)
-  end
-  
-  def run
-    unless OmniFocusClient.running?
-      @logger.info "OmniFocus is not running"
-      return
+# lib/jira_omnifocus/validation.rb
+module JiraOmnifocus
+  module Validation
+    HOSTNAME_PATTERN = %r{\Ahttps?://[\w\-.]+(:\d+)?(/[\w\-.]*)*\z}
+    USERNAME_PATTERN = /\A[\w\-.@]+\z/
+    
+    class ValidationError < StandardError; end
+    
+    def self.validate_hostname!(hostname)
+      hostname = hostname.to_s.strip
+      raise ValidationError, "Hostname cannot be empty" if hostname.empty?
+      raise ValidationError, "Invalid hostname format" unless hostname.match?(HOSTNAME_PATTERN)
+      raise ValidationError, "Hostname cannot end with '/'" if hostname.end_with?('/')
+      
+      hostname
     end
     
-    @logger.info "Starting synchronization..."
-    @synchronizer.sync_all
-    @logger.info "Synchronization complete"
-  rescue StandardError => e
-    @logger.error "Sync failed: #{e.message}"
-    @logger.debug e.backtrace.join("\n")
-    exit 1
-  end
-  
-  private
-  
-  def setup_logger
-    logger = Logger.new(STDOUT)
-    logger.level = @config.debug? ? Logger::DEBUG : Logger::INFO
-    logger
-  end
-end
-```
-
-### 8. Extract HTTP Communication
-**Location**: `bin/jiraomnifocus.rb:105-108, 337-340`
-
-#### Implementation Steps:
-1. Create JIRA client class:
-```ruby
-class JiraClient
-  def initialize(config, logger)
-    @config = config
-    @logger = logger
-    @http = setup_http_client
-  end
-  
-  def get_issues
-    response = get("/rest/api/2/search", {
-      jql: @config.filter,
-      maxResults: -1
-    })
-    
-    JSON.parse(response.body)["issues"]
-  rescue JSON::ParserError => e
-    @logger.error "Failed to parse JIRA response: #{e.message}"
-    raise
-  end
-  
-  def get_issue(jira_id)
-    response = get("/rest/api/2/issue/#{jira_id}")
-    JSON.parse(response.body)
-  end
-  
-  private
-  
-  def setup_http_client
-    uri = URI(@config.hostname)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = (uri.scheme == 'https')
-    http.verify_mode = @config.ssl_verify ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
-    http
-  end
-  
-  def get(path, params = {})
-    uri = build_uri(path, params)
-    request = Net::HTTP::Get.new(uri)
-    request.basic_auth(@config.username, @config.password)
-    
-    @logger.debug "GET #{uri}"
-    response = @http.request(request)
-    
-    unless response.code =~ /20[0-9]/
-      raise Net::HTTPError.new("HTTP #{response.code}: #{response.message}", response)
+    def self.validate_username!(username) 
+      username = username.to_s.strip
+      raise ValidationError, "Username cannot be empty" if username.empty?
+      raise ValidationError, "Invalid username format" unless username.match?(USERNAME_PATTERN)
+      
+      username
     end
     
-    response
-  end
-  
-  def build_uri(path, params)
-    uri = URI("#{@config.hostname}#{path}")
-    uri.query = URI.encode_www_form(params) unless params.empty?
-    uri
+    def self.sanitize_jql(filter)
+      # Remove potentially dangerous characters
+      filter.to_s.gsub(/['";\\\0\n\r]/, '')
+    end
   end
 end
 ```
 
-### 9. Implement Connection Pooling
-**Location**: HTTP requests throughout
+2. **Add configuration validation**:
+```ruby
+# lib/jira_omnifocus/configuration.rb  
+module JiraOmnifocus
+  class Configuration
+    attr_reader :hostname, :username, :filter, :ssl_verify, :debug
+    
+    def initialize(opts = {})
+      @hostname = Validation.validate_hostname!(opts[:hostname])
+      @username = Validation.validate_username!(opts[:username]) 
+      @filter = Validation.sanitize_jql(opts[:filter])
+      @ssl_verify = opts.fetch(:ssl_verify, true)
+      @debug = opts.fetch(:debug, false)
+      @password = opts[:password] # Keep private
+    end
+    
+    def password
+      @password
+    end
+    
+    def debug?
+      @debug
+    end
+    
+    def to_s
+      {
+        hostname: @hostname,
+        username: @username,
+        filter: @filter,
+        ssl_verify: @ssl_verify,
+        debug: @debug,
+        password: '[REDACTED]'
+      }.inspect
+    end
+  end
+end
+```
+
+### 2.2 Architecture Refactoring: Extract Core Classes
+**Dependencies: Validation | Blocks: Testing, maintainability**
 
 #### Implementation Steps:
-1. Add connection pooling gem to Gemfile:
-```ruby
-gem 'net-http-persistent'
+1. **Create lib/ directory structure**:
+```
+lib/
+├── jira_omnifocus.rb                 # Main module
+├── jira_omnifocus/
+│   ├── version.rb                    # Version management
+│   ├── configuration.rb              # Config handling  
+│   ├── validation.rb                 # Input validation
+│   ├── jira_client.rb               # JIRA API communication
+│   ├── omnifocus_client.rb          # OmniFocus AppleScript
+│   ├── task_synchronizer.rb         # Sync logic
+│   ├── logger.rb                    # Structured logging
+│   └── cli.rb                       # Command-line interface
 ```
 
-2. Update JiraClient:
+2. **Extract JIRA client**:
 ```ruby
-class JiraClient
-  def initialize(config, logger)
-    @config = config
-    @logger = logger
-    @http = Net::HTTP::Persistent.new
-    configure_http
-  end
-  
-  def configure_http
-    @http.verify_mode = @config.ssl_verify ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
-    @http.idle_timeout = 30
-    @http.max_requests = 100
-  end
-  
-  def get(path, params = {})
-    uri = build_uri(path, params)
-    request = Net::HTTP::Get.new(uri)
-    request.basic_auth(@config.username, @config.password)
+# lib/jira_omnifocus/jira_client.rb
+module JiraOmnifocus
+  class JiraClient
+    def initialize(config, logger)
+      @config = config
+      @logger = logger
+      @http_client = setup_http_client
+    end
     
-    response = @http.request(uri, request)
-    # ... rest of method
-  end
-  
-  def shutdown
-    @http.shutdown
+    def get_issues
+      response = get("/rest/api/2/search", {
+        jql: @config.filter,
+        maxResults: -1
+      })
+      
+      JSON.parse(response.body)["issues"]
+    rescue JSON::ParserError => e
+      @logger.error "Failed to parse JIRA response: #{e.message}"
+      raise
+    end
+    
+    def batch_get_issues(jira_ids)
+      return {} if jira_ids.empty?
+      
+      jql = "key in (#{jira_ids.join(',')})"
+      response = get("/rest/api/2/search", {
+        jql: jql,
+        fields: "resolution,assignee",
+        maxResults: jira_ids.size
+      })
+      
+      data = JSON.parse(response.body)
+      statuses = {}
+      
+      data["issues"].each do |issue|
+        statuses[issue["key"]] = {
+          resolution: issue["fields"]["resolution"],
+          assignee: issue["fields"]["assignee"]
+        }
+      end
+      
+      statuses
+    end
+    
+    private
+    
+    def setup_http_client
+      uri = URI(@config.hostname)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = (uri.scheme == 'https')
+      http.verify_mode = @config.ssl_verify ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
+      http.read_timeout = 30
+      http.open_timeout = 10
+      http
+    end
+    
+    def get(path, params = {})
+      uri = build_uri(path, params)
+      request = Net::HTTP::Get.new(uri)
+      request.basic_auth(@config.username, @config.password)
+      request['User-Agent'] = "jira-omnifocus/#{JiraOmnifocus::VERSION}"
+      
+      @logger.debug "GET #{uri}"
+      response = @http_client.request(request)
+      
+      unless response.code.match?(/\A2\d{2}\z/)
+        raise "HTTP #{response.code}: #{response.message}"
+      end
+      
+      response
+    end
+    
+    def build_uri(path, params)
+      uri = URI("#{@config.hostname}#{path}")
+      uri.query = URI.encode_www_form(params) unless params.empty?
+      uri
+    end
   end
 end
+```
+
+3. **Extract OmniFocus client**:
+```ruby
+# lib/jira_omnifocus/omnifocus_client.rb
+module JiraOmnifocus
+  class OmniFocusClient
+    def initialize(config, logger)
+      @config = config
+      @logger = logger
+    end
+    
+    def self.running?
+      app_is_running('OmniFocus')
+    end
+    
+    def document
+      @document ||= get_omnifocus_document
+    end
+    
+    def add_task(issue)
+      # Existing add_task logic from main script
+    end
+    
+    def get_jira_linked_tasks
+      tasks = {}
+      document.flattened_tasks.get.each do |task|
+        next if task.completed.get
+        next unless task.note.get.match(@config.hostname)
+        
+        full_url = task.note.get.lines.first.chomp
+        jira_id = full_url.sub("#{@config.hostname}/browse/", "")
+        tasks[jira_id] = task
+      end
+      tasks
+    end
+    
+    def mark_task_complete(task, jira_id)
+      return if task.completed.get
+      
+      task.mark_complete
+      @logger.info "Marked task completed: #{jira_id}"
+    end
+    
+    def delete_task(task, jira_id)
+      document.delete(task)
+      @logger.info "Removed task: #{jira_id}"
+    end
+    
+    private
+    
+    def get_omnifocus_document
+      omnifocus_app = OSX::ScriptingBridge.application_by_bundle_identifier("com.omnigroup.OmniFocus3")
+      omnifocus_app.default_document
+    end
+    
+    def self.app_is_running(app_name)
+      `ps aux`.match?(/#{Regexp.escape(app_name)}/)
+    end
+  end
+end
+```
+
+4. **Extract task synchronizer**:
+```ruby
+# lib/jira_omnifocus/task_synchronizer.rb
+module JiraOmnifocus
+  class TaskSynchronizer
+    def initialize(jira_client, omnifocus_client, logger)
+      @jira_client = jira_client
+      @omnifocus_client = omnifocus_client
+      @logger = logger
+    end
+    
+    def sync_all
+      add_new_tasks
+      update_existing_tasks
+    end
+    
+    private
+    
+    def add_new_tasks
+      @logger.info "Fetching new JIRA issues..."
+      issues = @jira_client.get_issues
+      
+      issues.each do |issue|
+        @omnifocus_client.add_task(issue)
+      end
+      
+      @logger.info "Added #{issues.size} new tasks"
+    end
+    
+    def update_existing_tasks
+      @logger.info "Checking existing task statuses..."
+      
+      # Get all JIRA-linked tasks from OmniFocus
+      tasks = @omnifocus_client.get_jira_linked_tasks
+      return if tasks.empty?
+      
+      @logger.info "Found #{tasks.size} JIRA-linked tasks to check"
+      
+      # Batch fetch JIRA statuses
+      statuses = @jira_client.batch_get_issues(tasks.keys)
+      
+      # Process each task
+      tasks.each do |jira_id, task|
+        status = statuses[jira_id]
+        next unless status
+        
+        if status[:resolution]
+          @omnifocus_client.mark_task_complete(task, jira_id)
+        elsif should_remove_task?(status)
+          @omnifocus_client.delete_task(task, jira_id)
+        end
+      end
+    end
+    
+    def should_remove_task?(status)
+      return true unless status[:assignee]
+      
+      assignee = status[:assignee]
+      assignee_name = assignee["name"]&.downcase
+      assignee_email = assignee["emailAddress"]&.downcase
+      
+      current_user = @jira_client.instance_variable_get(:@config).username.downcase
+      
+      assignee_name != current_user && assignee_email != current_user
+    end
+  end
+end
+```
+
+### 2.3 Eliminate Global Variables  
+**Dependencies: Architecture refactor | Blocks: Testing**
+
+#### Create main application class:
+```ruby
+# lib/jira_omnifocus/application.rb
+module JiraOmnifocus
+  class Application
+    def initialize(args = ARGV)
+      @config = Configuration.new(parse_options(args))
+      @logger = Logger.new(@config)
+      @jira_client = JiraClient.new(@config, @logger)
+      @omnifocus_client = OmniFocusClient.new(@config, @logger)
+      @synchronizer = TaskSynchronizer.new(@jira_client, @omnifocus_client, @logger)
+    end
+    
+    def run
+      unless OmniFocusClient.running?
+        @logger.error "OmniFocus is not running"
+        return false
+      end
+      
+      @logger.info "Starting JIRA-OmniFocus synchronization..."
+      @synchronizer.sync_all
+      @logger.info "Synchronization complete"
+      true
+    rescue StandardError => e
+      @logger.error "Synchronization failed: #{e.message}"
+      @logger.debug e.backtrace.join("\n")
+      false
+    end
+    
+    private
+    
+    def parse_options(args)
+      # Existing Optimist option parsing
+    end
+  end
+end
+```
+
+Update main executable:
+```ruby
+#!/usr/bin/env ruby
+# bin/jiraomnifocus
+
+require_relative '../lib/jira_omnifocus'
+
+exit_code = JiraOmnifocus::Application.new(ARGV).run ? 0 : 1
+exit exit_code
 ```
 
 ---
 
-## 🟢 LOW PRIORITY IMPROVEMENTS (Week 4)
+## 🟡 PHASE 3: MEDIUM PRIORITY - QUALITY & TESTING (Week 3-4)
+**Priority: Long-term maintainability**
 
-### 10. Replace Deprecated Methods
-**Location**: `bin/jiraomnifocus.rb:76`
+### 3.1 Comprehensive Testing Suite
+**Dependencies: Architecture refactor | Blocks: Confident releases**
 
+#### Setup testing framework:
 ```ruby
-# Replace
-URI::encode(filter)
-
-# With
-URI.encode_www_form_component(filter)
-```
-
-### 11. Improve Logging System
-```ruby
-class AppLogger
-  LEVELS = {
-    debug: Logger::DEBUG,
-    info: Logger::INFO,
-    warn: Logger::WARN,
-    error: Logger::ERROR
-  }
-  
-  def initialize(config)
-    @stdout_logger = Logger.new(STDOUT)
-    @file_logger = Logger.new(File.expand_path('~/.jofsync.log'), 'daily')
-    
-    level = config.debug? ? :debug : :info
-    set_level(level)
-    
-    @stdout_logger.formatter = simple_formatter
-    @file_logger.formatter = detailed_formatter
-  end
-  
-  def method_missing(method, *args)
-    if LEVELS.key?(method)
-      @stdout_logger.send(method, *args)
-      @file_logger.send(method, *args)
-    else
-      super
-    end
-  end
-  
-  private
-  
-  def simple_formatter
-    proc do |severity, datetime, progname, msg|
-      "#{severity[0]}: #{msg}\n"
-    end
-  end
-  
-  def detailed_formatter
-    proc do |severity, datetime, progname, msg|
-      "[#{datetime.iso8601}] #{severity}: #{msg}\n"
-    end
-  end
-end
-```
-
-### 12. Add Tests
-Create `spec/` directory with test coverage:
-
-```ruby
-# spec/jira_client_spec.rb
+# spec/spec_helper.rb
 require 'rspec'
-require_relative '../lib/jira_client'
+require 'webmock/rspec'
+require_relative '../lib/jira_omnifocus'
 
-RSpec.describe JiraClient do
-  let(:config) { double(hostname: 'https://example.atlassian.net', username: 'user', password: 'pass') }
-  let(:logger) { Logger.new(nil) }
-  let(:client) { JiraClient.new(config, logger) }
+RSpec.configure do |config|
+  config.expect_with :rspec do |expectations|
+    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
+  end
+  
+  config.mock_with :rspec do |mocks|
+    mocks.verify_partial_doubles = true
+  end
+  
+  config.shared_context_metadata_behavior = :apply_to_host_groups
+  config.disable_monkey_patching!
+  
+  WebMock.disable_net_connect!(allow_localhost: true)
+end
+```
+
+#### Create comprehensive test suite:
+```ruby
+# spec/jira_omnifocus/jira_client_spec.rb
+RSpec.describe JiraOmnifocus::JiraClient do
+  let(:config) { 
+    instance_double(
+      JiraOmnifocus::Configuration,
+      hostname: 'https://company.atlassian.net',
+      username: 'testuser',
+      password: 'testpass',
+      filter: 'assignee = currentUser()',
+      ssl_verify: true
+    )
+  }
+  let(:logger) { instance_double(JiraOmnifocus::Logger) }
+  let(:client) { described_class.new(config, logger) }
+  
+  before do
+    allow(logger).to receive(:debug)
+    allow(logger).to receive(:error)
+  end
   
   describe '#get_issues' do
     it 'fetches issues from JIRA API' do
-      # Test implementation
+      stub_request(:get, %r{https://company.atlassian.net/rest/api/2/search})
+        .to_return(
+          status: 200,
+          body: { issues: [{ key: 'TEST-1' }] }.to_json,
+          headers: { 'Content-Type' => 'application/json' }
+        )
+      
+      issues = client.get_issues
+      expect(issues).to eq([{ 'key' => 'TEST-1' }])
     end
     
     it 'handles API errors gracefully' do
-      # Test error handling
+      stub_request(:get, %r{https://company.atlassian.net/rest/api/2/search})
+        .to_return(status: 401, body: 'Unauthorized')
+      
+      expect { client.get_issues }.to raise_error(/HTTP 401/)
+    end
+  end
+  
+  describe '#batch_get_issues' do
+    it 'fetches multiple issues efficiently' do
+      jira_ids = %w[TEST-1 TEST-2]
+      
+      stub_request(:get, %r{https://company.atlassian.net/rest/api/2/search})
+        .with(query: hash_including(jql: 'key in (TEST-1,TEST-2)'))
+        .to_return(
+          status: 200,
+          body: {
+            issues: [
+              { key: 'TEST-1', fields: { resolution: nil, assignee: { name: 'user' } } },
+              { key: 'TEST-2', fields: { resolution: { name: 'Done' }, assignee: nil } }
+            ]
+          }.to_json
+        )
+      
+      statuses = client.batch_get_issues(jira_ids)
+      
+      expect(statuses).to have_key('TEST-1')
+      expect(statuses).to have_key('TEST-2')
+      expect(statuses['TEST-2'][:resolution]).to eq({ 'name' => 'Done' })
+    end
+    
+    it 'handles empty input' do
+      expect(client.batch_get_issues([])).to eq({})
+    end
+  end
+end
+```
+
+#### Add integration tests:
+```ruby
+# spec/integration/synchronization_spec.rb
+RSpec.describe 'Full Synchronization', type: :integration do
+  let(:config) { create_test_config }
+  let(:app) { JiraOmnifocus::Application.new([]) }
+  
+  before do
+    stub_omnifocus_running(true)
+    stub_jira_api_calls
+    stub_omnifocus_interactions
+  end
+  
+  it 'successfully synchronizes tasks' do
+    expect(app.run).to be true
+  end
+  
+  it 'handles JIRA API failures gracefully' do
+    stub_jira_failure
+    expect(app.run).to be false
+  end
+end
+```
+
+### 3.2 Code Quality & Documentation
+**Dependencies: Testing | Blocks: Maintainability**
+
+#### Update RuboCop configuration:
+```yaml
+# .rubocop.yml  
+require:
+  - rubocop-performance
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  Exclude:
+    - 'vendor/**/*'
+    - 'bin/*'
+
+Metrics/LineLength:
+  Max: 120
+
+Metrics/MethodLength:
+  Max: 20
+  
+Metrics/ClassLength:
+  Max: 200
+
+Style/Documentation:
+  Enabled: true
+  
+Performance/RedundantMerge:
+  Enabled: true
+```
+
+#### Add YARD documentation:
+```ruby
+# lib/jira_omnifocus/jira_client.rb
+module JiraOmnifocus
+  # JIRA API client for fetching issue data
+  #
+  # Handles authentication, request formatting, and response parsing
+  # for JIRA REST API v2 endpoints.
+  #
+  # @example Basic usage
+  #   config = Configuration.new(hostname: 'https://company.atlassian.net')
+  #   logger = Logger.new(config)
+  #   client = JiraClient.new(config, logger)
+  #   issues = client.get_issues
+  #
+  # @since 2.0.0
+  class JiraClient
+    # Initialize JIRA client
+    #
+    # @param config [Configuration] Application configuration
+    # @param logger [Logger] Application logger
+    def initialize(config, logger)
+      # Implementation
+    end
+    
+    # Fetch issues matching configured filter
+    #
+    # @return [Array<Hash>] Array of JIRA issue data
+    # @raise [StandardError] On API communication failure
+    def get_issues
+      # Implementation  
+    end
+  end
+end
+```
+
+### 3.3 Modern Development Tooling
+**Dependencies: Code quality | Blocks: Efficient development**
+
+#### Add development scripts:
+```ruby
+# bin/setup
+#!/usr/bin/env ruby
+
+puts "Setting up jira-omnifocus development environment..."
+
+# Install dependencies
+system("bundle install") || abort("Bundle install failed")
+
+# Setup pre-commit hooks
+if system("which pre-commit > /dev/null 2>&1")
+  system("pre-commit install")
+else
+  puts "Consider installing pre-commit for automated code quality checks"
+end
+
+# Create sample config
+unless File.exist?(File.expand_path('~/.jofsync.yaml'))
+  puts "Copying sample configuration..."
+  system("cp jofsync.yaml.sample ~/.jofsync.yaml")
+  puts "Please edit ~/.jofsync.yaml with your JIRA details"
+end
+
+puts "Development environment ready!"
+```
+
+#### Add Makefile for common tasks:
+```makefile
+# Makefile
+.PHONY: test lint security setup clean
+
+setup:
+	bin/setup
+
+test:
+	bundle exec rspec
+
+lint:
+	bundle exec rubocop
+	
+lint-fix:
+	bundle exec rubocop -a
+
+security:
+	bundle exec bundler-audit check
+	
+docs:
+	bundle exec yard doc
+	
+clean:
+	rm -rf coverage/ doc/ tmp/
+
+release-check: test lint security
+	@echo "All checks passed - ready for release"
+```
+
+---
+
+## 🟢 PHASE 4: LOW PRIORITY - ENHANCED FEATURES (Week 5+)
+**Priority: User experience and advanced features**
+
+### 4.1 Enhanced CLI Experience
+**Dependencies: Core refactoring | Blocks: User adoption**
+
+#### Modern CLI with Thor:
+```ruby
+# Add to Gemfile
+gem 'thor', '~> 1.3.0'
+gem 'tty-prompt', '~> 0.23.0'  
+gem 'tty-spinner', '~> 0.9.0'
+gem 'pastel', '~> 0.8.0'
+```
+
+```ruby
+# lib/jira_omnifocus/cli.rb
+require 'thor'
+require 'tty-prompt'
+require 'tty-spinner'
+require 'pastel'
+
+module JiraOmnifocus
+  class CLI < Thor
+    desc "sync", "Synchronize JIRA tickets with OmniFocus"
+    option :config, aliases: '-c', desc: 'Configuration file path'
+    option :dry_run, type: :boolean, desc: 'Show what would be done without making changes'
+    option :verbose, aliases: '-v', type: :boolean, desc: 'Verbose output'
+    def sync
+      app = Application.new(options)
+      
+      spinner = TTY::Spinner.new("[:spinner] Synchronizing...", format: :dots)
+      spinner.auto_spin
+      
+      success = app.run
+      
+      spinner.stop
+      if success
+        say "✅ Synchronization completed successfully", :green
+      else
+        say "❌ Synchronization failed", :red
+        exit 1
+      end
+    end
+    
+    desc "setup", "Interactive setup wizard"
+    def setup
+      prompt = TTY::Prompt.new
+      
+      say "🔧 JIRA-OmniFocus Setup Wizard", :cyan
+      
+      hostname = prompt.ask("JIRA hostname (e.g., https://company.atlassian.net):")
+      username = prompt.ask("JIRA username:")
+      password = prompt.mask("JIRA password or API token:")
+      
+      # Save configuration securely
+      setup_wizard = SetupWizard.new(prompt)
+      setup_wizard.run(hostname: hostname, username: username, password: password)
+    end
+    
+    desc "version", "Show version information"
+    def version
+      say "jira-omnifocus #{JiraOmnifocus::VERSION}", :green
+      say "Ruby #{RUBY_VERSION}", :blue
+    end
+    
+    desc "doctor", "Check system configuration and requirements"
+    def doctor
+      doctor = SystemDoctor.new
+      doctor.run
+    end
+    
+    private
+    
+    def say(message, color = nil)
+      pastel = Pastel.new
+      puts color ? pastel.send(color, message) : message
+    end
+  end
+end
+```
+
+### 4.2 Advanced Configuration Management
+**Dependencies: CLI enhancements | Blocks: Enterprise usage**
+
+#### Multi-environment support:
+```yaml
+# config/environments/development.yml
+development:
+  jira:
+    hostname: https://company-dev.atlassian.net
+    ssl_verify: false
+  omnifocus:
+    project: "Development Tasks"
+  logging:
+    level: debug
+
+# config/environments/production.yml  
+production:
+  jira:
+    hostname: https://company.atlassian.net
+    ssl_verify: true
+  omnifocus:
+    project: "Work"  
+  logging:
+    level: info
+```
+
+### 4.3 Modern Authentication & APIs
+**Dependencies: Configuration system | Blocks: Enterprise adoption**
+
+#### OAuth 2.0 support:
+```ruby
+# lib/jira_omnifocus/auth/oauth_client.rb
+module JiraOmnifocus
+  module Auth
+    class OAuthClient
+      def initialize(config)
+        @config = config
+        @oauth_client = OAuth2::Client.new(
+          config.oauth_client_id,
+          config.oauth_client_secret,
+          site: config.hostname,
+          authorize_url: '/plugins/servlet/oauth/authorize',
+          token_url: '/plugins/servlet/oauth/token'
+        )
+      end
+      
+      def get_access_token
+        # OAuth 2.0 flow implementation
+      end
+    end
+  end
+end
+```
+
+### 4.4 Performance & Monitoring
+**Dependencies: Core system | Blocks: Scale**
+
+#### Add metrics collection:
+```ruby
+# lib/jira_omnifocus/metrics.rb
+module JiraOmnifocus
+  class Metrics
+    def self.time(operation)
+      start_time = Time.now
+      result = yield
+      duration = Time.now - start_time
+      
+      record_metric(operation, duration)
+      result
+    end
+    
+    def self.record_sync_stats(added:, completed:, removed:)
+      # Record synchronization statistics
     end
   end
 end
@@ -518,70 +920,63 @@ end
 
 ---
 
-## Implementation Timeline
+## 📈 IMPLEMENTATION ROADMAP
 
-### Week 1: Critical Security Fixes
-- [x] Remove password from debug output - **COMPLETED** (PR #59)
-- [x] Fix exception handling - **COMPLETED** (PR #60)
-- [ ] Enforce secure credential storage
-- [ ] Deploy hotfix version
+### Dependency Graph
+```
+Phase 1 (Foundation)
+├── Ruby 3.3+ Update → Security Audit → Compatibility Testing
+└── Blocks: All other phases
 
-### Week 2: Performance & Reliability
-- [ ] Implement batch API calls
-- [ ] Add input validation
-- [ ] Refactor large methods
-- [ ] Performance testing
+Phase 2 (Core Improvements)  
+├── Input Validation → Architecture Refactor → Global Variables
+└── Requires: Phase 1
 
-### Week 3: Code Quality
-- [ ] Remove global variables
-- [ ] Extract client classes
-- [ ] Implement connection pooling
-- [ ] Code review
+Phase 3 (Quality & Testing)
+├── Testing Suite → Code Quality → Development Tooling  
+└── Requires: Phase 2
 
-### Week 4: Polish & Documentation
-- [ ] Fix deprecated methods
-- [ ] Improve logging
-- [ ] Add test suite
-- [ ] Update documentation
+Phase 4 (Enhanced Features)
+├── CLI Experience → Configuration → Authentication → Monitoring
+└── Requires: Phase 3
+```
 
----
+### Weekly Milestones
+- **Week 1**: Foundation solid, Ruby 3.3+, security patched, CI fixed
+- **Week 2**: Architecture refactored, testable, maintainable codebase
+- **Week 3**: Comprehensive test coverage, quality gates, documentation
+- **Week 4**: Modern tooling, development workflow, automation
+- **Week 5+**: Enhanced features based on user feedback
 
-## Testing Strategy
+### Success Metrics
+- ✅ **Security**: 0 known vulnerabilities (bundler-audit)
+- ✅ **Performance**: >50% improvement in sync time
+- ✅ **Quality**: >95% test coverage, 0 RuboCop violations  
+- ✅ **Maintainability**: <20 lines average method length
+- ✅ **Usability**: <2 minute setup time for new users
 
-### Manual Testing Checklist
-- [ ] Test with keychain authentication
-- [ ] Test with API token
-- [ ] Test with invalid credentials
-- [ ] Test with no network connection
-- [ ] Test with 0, 1, 10, 100+ JIRA tickets
-- [ ] Test task creation in inbox mode
-- [ ] Test task creation in project mode
-- [ ] Test with debug mode enabled
-
-### Automated Testing Goals
-- Unit test coverage > 80%
-- Integration tests for JIRA API
-- Mock OmniFocus interactions
-- Performance benchmarks
+### Risk Mitigation
+- **Backward Compatibility**: Maintain v1.x branch as fallback
+- **Incremental Updates**: Small PRs with comprehensive testing
+- **User Communication**: Clear migration guides and release notes
+- **Feature Flags**: Gradual rollout of breaking changes
 
 ---
 
-## Deployment Notes
+## 🚀 IMMEDIATE NEXT STEPS
 
-1. **Version Numbering**: Increment to 2.0.0 for breaking changes
-2. **Migration Guide**: Document config file changes
-3. **Rollback Plan**: Keep version 1.x branch for emergency rollback
-4. **Communication**: Notify users of security fixes via GitHub releases
+### This Week (Phase 1)
+1. **Create modernization branch**: `git checkout -b modernization/phase-1-foundation`
+2. **Update Ruby version**: Add `.ruby-version`, update Gemfile, test compatibility  
+3. **Security audit**: Run `bundler-audit`, fix critical vulnerabilities
+4. **Fix CI/CD**: Update GitHub Actions, test matrix, caching
+5. **Update dependencies**: Prioritize security patches
 
----
+### Communication Plan
+- **GitHub Issues**: Track all modernization tasks with proper labels
+- **GitHub Discussions**: Community feedback on architectural decisions  
+- **Release Notes**: Clear communication of breaking changes
+- **Migration Guide**: Step-by-step upgrade instructions
+- **Weekly Updates**: Progress reports in GitHub Discussions
 
-## Long-term Improvements
-
-1. **Consider Rewrite**: Ruby on Rails for web interface
-2. **Add Features**: 
-   - Two-way sync
-   - Custom field mapping
-   - Multiple JIRA project support
-3. **Modern Authentication**: OAuth 2.0 support
-4. **Monitoring**: Add telemetry and error reporting
-5. **Distribution**: Homebrew formula for easier installation
+*This comprehensive modernization plan transforms jira-omnifocus from a legacy 2015-era script into a modern, secure, maintainable Ruby application while preserving all existing functionality and improving performance significantly.*

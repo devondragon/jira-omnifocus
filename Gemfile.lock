@@ -1,28 +1,116 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    ast (2.4.3)
+    bundler-audit (0.9.2)
+      bundler (>= 1.2.0, < 3)
+      thor (~> 1.0)
     corefoundation (0.2.0)
       ffi
-    ffi (1.11.1)
-    highline (2.0.2)
-    json (2.3.0)
-    optimist (3.0.0)
-    rb-scpt (1.0.3)
+    diff-lcs (1.6.2)
+    ffi (1.17.2)
+    ffi (1.17.2-aarch64-linux-gnu)
+    ffi (1.17.2-aarch64-linux-musl)
+    ffi (1.17.2-arm-linux-gnu)
+    ffi (1.17.2-arm-linux-musl)
+    ffi (1.17.2-arm64-darwin)
+    ffi (1.17.2-x86-linux-gnu)
+    ffi (1.17.2-x86-linux-musl)
+    ffi (1.17.2-x86_64-darwin)
+    ffi (1.17.2-x86_64-linux-gnu)
+    ffi (1.17.2-x86_64-linux-musl)
+    highline (3.1.2)
+      reline
+    io-console (0.8.1)
+    json (2.13.2)
+    language_server-protocol (3.17.0.5)
+    lint_roller (1.1.0)
+    optimist (3.2.1)
+    parallel (1.27.0)
+    parser (3.3.9.0)
+      ast (~> 2.4.1)
+      racc
+    prism (1.4.0)
+    racc (1.8.1)
+    rainbow (3.1.1)
+    rb-scpt (1.0.4)
+    regexp_parser (2.11.2)
+    reline (0.6.2)
+      io-console (~> 0.5)
+    rspec (3.13.1)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.5)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.5)
+    rubocop (1.80.0)
+      json (~> 2.3)
+      language_server-protocol (~> 3.17.0.2)
+      lint_roller (~> 1.1.0)
+      parallel (~> 1.10)
+      parser (>= 3.3.0.2)
+      rainbow (>= 2.2.2, < 4.0)
+      regexp_parser (>= 2.9.3, < 3.0)
+      rubocop-ast (>= 1.46.0, < 2.0)
+      ruby-progressbar (~> 1.7)
+      unicode-display_width (>= 2.4.0, < 4.0)
+    rubocop-ast (1.46.0)
+      parser (>= 3.3.7.2)
+      prism (~> 1.4)
+    rubocop-performance (1.25.0)
+      lint_roller (~> 1.1)
+      rubocop (>= 1.75.0, < 2.0)
+      rubocop-ast (>= 1.38.0, < 2.0)
+    rubocop-rspec (3.6.0)
+      lint_roller (~> 1.1)
+      rubocop (~> 1.72, >= 1.72.1)
     ruby-keychain (0.3.2)
       corefoundation (~> 0.2.0)
       ffi
+    ruby-progressbar (1.13.0)
     terminal-notifier (2.0.0)
+    thor (1.4.0)
+    unicode-display_width (3.1.5)
+      unicode-emoji (~> 4.0, >= 4.0.4)
+    unicode-emoji (4.0.4)
+    yard (0.9.37)
 
 PLATFORMS
+  aarch64-linux-gnu
+  aarch64-linux-musl
+  arm-linux-gnu
+  arm-linux-musl
+  arm64-darwin
   ruby
+  x86-linux-gnu
+  x86-linux-musl
+  x86_64-darwin
+  x86_64-linux-gnu
+  x86_64-linux-musl
 
 DEPENDENCIES
-  highline
-  json
-  optimist
-  rb-scpt
-  ruby-keychain
-  terminal-notifier
+  bundler-audit (~> 0.9)
+  highline (~> 3.0)
+  json (~> 2.7)
+  optimist (~> 3.1)
+  rb-scpt (~> 1.0.3)
+  rspec (~> 3.12)
+  rubocop (~> 1.60)
+  rubocop-performance (~> 1.20)
+  rubocop-rspec (~> 3.0)
+  ruby-keychain (~> 0.3.2)
+  terminal-notifier (~> 2.0.0)
+  yard (~> 0.9)
+
+RUBY VERSION
+   ruby 3.4.1p0
 
 BUNDLED WITH
-   2.1.4
+   2.7.1

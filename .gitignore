@@ -4,3 +4,6 @@
 vendor
 fixes.md
 MODERNIZATION_PLAN.md
+
+# Test coverage reports
+coverage/

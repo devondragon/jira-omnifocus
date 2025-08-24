@@ -91,23 +91,40 @@ module JiraOmnifocus
     def task_exists?(task_name)
       @logger.debug "Checking for existing task: #{task_name}"
       
+      # Performance optimization: Use AppleScript query instead of fetching all tasks
+      # This pushes the search to OmniFocus which is much faster
       exists = if @config.inbox || @config.newproj
-        # Search entire document
+        # Search entire document using AppleScript query
         @logger.debug "Searching entire OmniFocus document"
-        @document.flattened_tasks.get.find do |t| 
-          t.name.get.force_encoding("UTF-8") == task_name 
+        begin
+          # Try to find task by name directly in OmniFocus
+          matching_tasks = @document.flattened_tasks[its.name.eq(task_name)].get
+          !matching_tasks.empty?
+        rescue StandardError
+          # Fallback to original method if AppleScript query fails
+          @logger.debug "AppleScript query failed, using fallback search"
+          @document.flattened_tasks.get.find do |t| 
+            t.name.get.force_encoding("UTF-8") == task_name 
+          end
         end
       else
         # Search only in specified project
         project = @document.flattened_tasks[@config.project]
         @logger.debug "Searching only project: #{project.name.get}"
-        project.tasks.get.find do |t| 
-          t.name.get.force_encoding("UTF-8") == task_name 
+        begin
+          # Try optimized search first
+          matching_tasks = project.tasks[its.name.eq(task_name)].get
+          !matching_tasks.empty?
+        rescue StandardError
+          # Fallback to original method
+          project.tasks.get.find do |t| 
+            t.name.get.force_encoding("UTF-8") == task_name 
+          end
         end
       end
       
-      @logger.debug "Task exists = #{!exists.nil?}"
-      !exists.nil?
+      @logger.debug "Task exists = #{!exists.nil? && exists != false}"
+      !exists.nil? && exists != false
     end
     
     def build_omnifocus_properties(task_properties, tag)
@@ -149,9 +166,21 @@ module JiraOmnifocus
     def find_task_by_jira_id(jira_id)
       url_pattern = "#{@config.hostname}/browse/#{jira_id}"
       
-      @document.flattened_tasks.get.find do |task|
-        task_note = task.note.get
-        task_note&.include?(url_pattern)
+      # Performance optimization: Try to limit the search scope
+      begin
+        # Try to use AppleScript query for better performance
+        tasks_with_notes = @document.flattened_tasks[its.note.ne("")].get
+        tasks_with_notes.find do |task|
+          task_note = task.note.get
+          task_note&.include?(url_pattern)
+        end
+      rescue StandardError
+        # Fallback to original method if optimized query fails
+        @logger.debug "Optimized search failed, using fallback"
+        @document.flattened_tasks.get.find do |task|
+          task_note = task.note.get
+          task_note&.include?(url_pattern)
+        end
       end
     end
   end

@@ -1,16 +1,51 @@
 ---
+# JIRA-OmniFocus Sync Configuration
+# 
+# SECURITY RECOMMENDATION: Use macOS Keychain for credentials instead of this file!
+# 
+# To set up Keychain storage (recommended):
+#   1. Run: security add-internet-password -a YOUR_USERNAME -s example.atlassian.net -w YOUR_API_TOKEN
+#   2. Set 'keychain: true' below
+#   3. Remove the 'username' and 'password' fields
+#
+# For JIRA Cloud, use an API token instead of your password:
+#   Create one at: https://id.atlassian.com/manage/api-tokens
+
 jira:
-  hostname: 'http://example.atlassian.net'
-  keychain: false
-  username: 'me'
-  password: 'secret'
-  filter:   'assignee = currentUser() AND status not in (Closed, Resolved)'
-  ssl_verify: true     # Verify the server certificate
+  # IMPORTANT: Always use HTTPS for security
+  hostname: 'https://example.atlassian.net'
+  
+  # RECOMMENDED: Use macOS Keychain for secure credential storage
+  keychain: true
+  
+  # Only needed if keychain is false (NOT RECOMMENDED)
+  # username: 'your-email@example.com'
+  # password: 'your-api-token'  # WARNING: Storing credentials here is a security risk!
+  
+  # JQL filter to select which JIRA issues to sync
+  filter: 'assignee = currentUser() AND status not in (Closed, Resolved)'
+  
+  # SSL verification (keep true for security)
+  ssl_verify: true
+
 omnifocus:
-  tag:  'Office'   # The default OF Context where new tasks are created.
-  project:  'Jira'     # The default OF Project where new tasks are created.
-  flag:     true       # Set this to 'true' if you want the new tasks to be flagged.
-  inbox:    false      # Set 'true' if you want tasks in the Inbox instead of in a specific project.
-  newproj:  false      # Set 'true' to add each JIRA ticket to OF as a Project instead of a Task.
-  descsync: false      # Set 'true' if you want JIRA task descriptions synced to OF task notes
-  folder:   'Jira'     # Sets the OF folder where new Projects are created (only applies if 'newproj' is 'true').
+  # The OmniFocus tag to apply to synced tasks
+  tag: 'Office'
+  
+  # The OmniFocus project where tasks are created
+  project: 'Jira'
+  
+  # Whether to flag new tasks
+  flag: true
+  
+  # Set true to put tasks in Inbox instead of a project
+  inbox: false
+  
+  # Set true to create each JIRA ticket as a Project (not Task)
+  newproj: false
+  
+  # Set true to sync JIRA descriptions to OmniFocus notes
+  descsync: false
+  
+  # Folder for new projects (only used if newproj is true)
+  folder: 'Jira'

@@ -10,7 +10,7 @@ module JiraOmnifocus
     
     def initialize(opts = {})
       # JIRA configuration - handle empty/nil values gracefully
-      @hostname = opts[:hostname] && !opts[:hostname].empty? ? Validation.validate_hostname!(opts[:hostname]) : 'http://please-configure-me.atlassian.net'
+      @hostname = opts[:hostname] && !opts[:hostname].empty? ? Validation.validate_hostname!(opts[:hostname]) : 'https://please-configure-me.atlassian.net'
       @username = opts[:username] && !opts[:username].empty? ? Validation.validate_username!(opts[:username]) : ''
       @filter = Validation.sanitize_jql(opts[:filter] || 'resolution = Unresolved and issue in watchedissues()')
       @ssl_verify = opts.fetch(:ssl_verify, true)
@@ -112,7 +112,7 @@ module JiraOmnifocus
     def self.default_config
       {
         'jira' => {
-          'hostname' => 'http://please-configure-me-in-jofsync.yaml.atlassian.net',
+          'hostname' => 'https://please-configure-me-in-jofsync.yaml.atlassian.net',
           'usekeychain' => false,
           'username' => '',
           'password' => '',

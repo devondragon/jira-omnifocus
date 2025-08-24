@@ -7,6 +7,10 @@ require 'uri'
 
 module JiraOmnifocus
   class JiraClient
+    # HTTP timeout constants (in seconds)
+    READ_TIMEOUT = 30
+    OPEN_TIMEOUT = 10
+    
     def initialize(config, logger)
       @config = config
       @logger = logger
@@ -93,11 +97,26 @@ module JiraOmnifocus
     
     def setup_http_client
       uri = URI(@config.hostname)
+      
+      # Enforce HTTPS for security
+      unless uri.scheme == 'https'
+        raise "Security Error: JIRA hostname must use HTTPS. Current value: #{@config.hostname}"
+      end
+      
       http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = (uri.scheme == 'https')
-      http.verify_mode = @config.ssl_verify ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
-      http.read_timeout = 30
-      http.open_timeout = 10
+      http.use_ssl = true
+      
+      # Warn if SSL verification is disabled
+      if @config.ssl_verify
+        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+      else
+        @logger.error "⚠️  SECURITY WARNING: SSL verification is disabled. This is vulnerable to MITM attacks!"
+        @logger.error "⚠️  Only use this for testing. Enable SSL verification for production use."
+        http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      end
+      
+      http.read_timeout = READ_TIMEOUT
+      http.open_timeout = OPEN_TIMEOUT
       http
     end
     

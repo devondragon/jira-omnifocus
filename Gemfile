@@ -9,14 +9,10 @@ gem 'highline', '~> 3.0'        # 2.0.2 → 3.0+ (Unicode support)
 gem 'json', '~> 2.7'            # 2.3.0 → 2.7+ (performance, security)
 gem 'optimist', '~> 3.1'        # 3.0.0 → 3.1+ (bug fixes)
 
-# macOS-specific dependencies (only install on macOS)
-platforms :ruby do
-  if RUBY_PLATFORM.match?(/darwin/)
-    gem 'rb-scpt', '~> 1.0.3' # AppleScript bridge (no updates)
-    gem 'ruby-keychain', '~> 0.3.2', require: 'keychain' # Keychain integration  
-    gem 'terminal-notifier', '~> 2.0.0' # 2.0.0 → 2.0.0 (macOS compatibility)
-  end
-end
+# macOS dependencies - required for OmniFocus integration
+gem 'rb-scpt', '~> 1.0.3' # AppleScript bridge (no updates)
+gem 'ruby-keychain', '~> 0.3.2', require: 'keychain' # Keychain integration  
+gem 'terminal-notifier', '~> 2.0.0' # macOS notifications
 
 # Development and quality tools
 group :development, :test do

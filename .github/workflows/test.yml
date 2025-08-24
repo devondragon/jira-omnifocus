@@ -14,9 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Test on both macOS and Ubuntu, multiple Ruby versions
-        os: [macos-latest, ubuntu-latest]
-        ruby-version: ['3.2', '3.3', '3.4']  # Skip 3.1 for now due to Bundler compatibility
+        # macOS only - OmniFocus is Mac-exclusive
+        os: [macos-latest]
+        ruby-version: ['3.2', '3.3', '3.4']
         
     steps:
       - name: Checkout repository
@@ -155,7 +155,7 @@ jobs:
   # Summary job that depends on all others
   test-summary:
     name: "Test Summary"
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: [test, quality, integration, performance]
     if: always()
     

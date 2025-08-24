@@ -12,7 +12,7 @@ on:
 jobs:
   security-audit:
     name: "Security Audit"
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     
     steps:
       - name: Checkout repository
@@ -44,7 +44,7 @@ jobs:
 
   dependency-review:
     name: "Dependency Review"
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     if: github.event_name == 'pull_request'
     
     steps:
@@ -58,7 +58,7 @@ jobs:
 
   outdated-check:
     name: "Check for Outdated Dependencies"
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     if: github.event_name == 'schedule'
     
     steps:

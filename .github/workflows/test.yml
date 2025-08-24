@@ -16,7 +16,7 @@ jobs:
       matrix:
         # Test on both macOS and Ubuntu, multiple Ruby versions
         os: [macos-latest, ubuntu-latest]
-        ruby-version: ['3.1', '3.2', '3.3', '3.4']
+        ruby-version: ['3.2', '3.3', '3.4']  # Skip 3.1 for now due to Bundler compatibility
         
     steps:
       - name: Checkout repository

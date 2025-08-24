@@ -90,7 +90,7 @@ def get_issues
       $opts[:username] = keychainitem.account
       $opts[:password] = keychainitem.password
       if $DEBUG
-        puts "JOFSYNC.get_issues: username and password loaded from Keychain"
+        puts "JOFSYNC.get_issues: credentials loaded from Keychain"
       end
     else
       raise "Password for #{host} not found in keychain; add it using 'security add-internet-password -a <username> -s #{host} -w <password>'"
@@ -109,7 +109,6 @@ def get_issues
     # If the response was good, then grab the data
     if $DEBUG
       puts "JOFSYNC.get_issues: response code: " + response.code
-      puts "JOFSYNC.get_issues: response body: " + response.body
     end
     if response.code =~ /20[0-9]{1}/
       puts "Connected successfully to " + uri.hostname
@@ -340,7 +339,6 @@ def mark_resolved_jira_tickets_as_complete_in_omnifocus (omnifocus_document)
           response = http.request request
           if $DEBUG
             puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response code: " + response.code
-            puts "JOFSYNC.mark_resolved_jira_tickets_as_complete_in_omnifocus: response body: " + response.body
           end
           if response.code =~ /20[0-9]{1}/
             data = JSON.parse(response.body)

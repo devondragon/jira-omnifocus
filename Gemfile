@@ -6,7 +6,7 @@ source 'https://rubygems.org'
 
 # Core dependencies with version constraints
 gem 'highline', '~> 3.0'        # 2.0.2 → 3.0+ (Unicode support)
-gem 'json', '~> 2.7'            # 2.3.0 → 2.7+ (performance, security)
+gem 'json', '~> 2.19'           # 2.3.0 → 2.7+ (performance, security)
 gem 'optimist', '~> 3.1'        # 3.0.0 → 3.1+ (bug fixes)
 
 # macOS dependencies - required for OmniFocus integration
